@@ -13,9 +13,9 @@ export default defineConfig({
         rollupOptions: {
             input: {
                 // main: 'index.html',
-                admin: 'admin.html',
+                admin: 'admin-viet.html',
                 payment: 'payment.html',
-                paymentAdmin: 'payment-admin.html',
+                paymentAdmin: 'admin-payment.html',
             },
             output: {
                 manualChunks: undefined,
