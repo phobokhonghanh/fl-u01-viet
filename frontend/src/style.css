@@ -519,6 +519,43 @@ textarea:focus {
   background: var(--primary-hover);
 }
 
+.admin-footer-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  font-size: 0.82rem;
+  color: var(--text-light);
+}
+
+.admin-footer-nav a {
+  text-decoration: none;
+  color: var(--primary);
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.admin-footer-nav a:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.admin-footer-nav a.is-active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .split-layout {
