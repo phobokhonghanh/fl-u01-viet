@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Thanh toán</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <style>
+    :root {
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --bg: #f1f5f9;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --text-light: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      color: var(--text);
+    }
+    .wrapper {
+      width: 100%;
+      max-width: 480px;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .logo h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .logo h1 span {
+      color: var(--primary);
+    }
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 2rem;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+    /* Status badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.9rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .status-PENDING   { background: #fef9c3; color: #854d0e; }
+    .status-PAID      { background: #dcfce7; color: #166534; }
+    .status-PARTIALLY_PAID { background: #ffedd5; color: #9a3412; }
+    .status-EXPIRED   { background: #f1f5f9; color: #64748b; }
+    /* Order info */
+    .order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+    }
+    .order-id {
+      font-size: 0.72rem;
+      color: var(--text-light);
+      margin-top: 0.2rem;
+    }
+    .order-user {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+    .amount-display {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 1.25rem;
+      text-align: center;
+    }
+    /* QR Section */
+    .qr-section {
+      text-align: center;
+      margin: 1.25rem 0;
+    }
+    .qr-section img {
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      max-width: 220px;
+      width: 100%;
+    }
+    .qr-hint {
+      font-size: 0.78rem;
+      color: var(--text-light);
+      margin-top: 0.6rem;
+    }
+    /* Divider */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1.25rem 0;
+    }
+    /* Item/Note display */
+    .section-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-light);
+      margin-bottom: 0.4rem;
+    }
+    .item-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      font-size: 0.88rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-bottom: 1rem;
+      line-height: 1.7;
+    }
+    .note-box {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #92400e;
+      line-height: 1.6;
+    }
+    /* Waiting state */
+    .waiting-box {
+      text-align: center;
+      padding: 1.25rem;
+      background: #f8fafc;
+      border-radius: 10px;
+      border: 1px dashed var(--border);
+    }
+    .waiting-box p {
+      font-size: 0.85rem;
+      color: var(--text-light);
+      margin-top: 0.5rem;
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #e2e8f0;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 0.75rem;
+    }
+    /* Buttons */
+    .btn-refresh {
+      width: 100%;
+      margin-top: 1rem;
+      padding: 0.7rem;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    .btn-refresh:hover { background: var(--primary-hover); }
+
+    /* Error state */
+    .error-box {
+      text-align: center;
+      padding: 2rem;
+      color: var(--error);
+    }
+    .error-box h2 { margin-bottom: 0.5rem; }
+    .error-box p { font-size: 0.85rem; color: var(--text-light); }
+
+    /* Lookup form */
+    .lookup-form label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      color: var(--text-light);
+    }
+    .lookup-form input {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      margin-bottom: 0.75rem;
+    }
+    .lookup-form input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+    }
+    .footer-note {
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--text-light);
+      margin-top: 1.25rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.3s ease; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="logo">
+      <h1>Client <span style="font-size:0.6em; background:#3b82f6; color:#fff; padding:2px 8px; border-radius:999px; vertical-align:middle;">PAY</span></h1>
+      <a href="https://www.facebook.com/nguyennef.ndn" style="font-size:0.78rem; color:#64748b; text-decoration:none;">by tuitenPhở</a>
+    </div>
+    <div class="card" id="main-card">
+      <!-- JS sẽ render nội dung vào đây -->
+      <div style="text-align:center; padding: 2rem 0;">
+        <div class="spinner"></div>
+        <p style="color:var(--text-light); font-size:0.85rem;">Đang tải đơn hàng...</p>
+      </div>
+    </div>
+    <p class="footer-note">Hãy <strong>bookmark</strong> trang này để nhận cập nhật sau thanh toán.</p>
+  </div>
+  <script type="module" src="/src/payment.js"></script>
+</body>
+</html>

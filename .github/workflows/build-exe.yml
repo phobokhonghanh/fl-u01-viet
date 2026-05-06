@@ -1,0 +1,38 @@
+name: EXE CI
+
+on:
+  push:
+    branches: ["deploy/exe"]
+    paths:
+      - 'autohdr_exe/**'
+  workflow_dispatch:
+
+jobs:
+  build_v2:
+    runs-on: windows-latest
+    steps:
+    - name: Tải Code vào môi trường Build
+      uses: actions/checkout@v4
+
+    - name: Cài đặt Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Cài đặt Thư viện và PyInstaller
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -r autohdr_exe/requirements.txt
+
+    - name: Đóng gói thành file chạy (.exe)
+      working-directory: ./autohdr_exe
+      run: |
+        pyinstaller --onefile --noconsole --name AutoHDR_download main.py
+
+    - name: Lưu trữ và gửi file cài đặt v2
+      uses: actions/upload-artifact@v4
+      with:
+        name: AutoHDR_download
+        path: autohdr_exe/dist/AutoHDR_download.exe
+        retention-days: 7

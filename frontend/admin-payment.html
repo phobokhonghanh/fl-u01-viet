@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin PAYMENT</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+
+<body>
+  <div id="payment-admin-app" class="container">
+    <header>
+      <h1>Admin <span class="version">PAYMENT</span></h1>
+      <a href="https://www.facebook.com/nguyennef.ndn">by tuitenPhở</a>
+    </header>
+
+    <div class="split-layout" style="grid-template-columns: 2fr 3fr;">
+      <!-- Cột trái: Form tạo đơn hàng -->
+      <div class="split-left">
+        <div class="card">
+          <h3>Tạo Đơn Hàng</h3>
+          <form id="order-form">
+            <div class="form-group">
+              <label for="admin-pass">Mật khẩu Admin</label>
+              <input type="password" id="admin-pass" placeholder="Nhập mật khẩu..." required />
+            </div>
+            <div class="form-divider">Thông tin đơn</div>
+            <div class="form-group">
+              <label for="order-username">Tên khách hàng</label>
+              <input type="text" id="order-username" placeholder="VD: Nguyễn Văn A" required />
+            </div>
+            <div class="form-group">
+              <label for="order-amount">Số tiền (VNĐ)</label>
+              <input type="number" id="order-amount" placeholder="VD: 99000" min="1000" required />
+            </div>
+            <div class="form-group">
+              <label for="order-item">Nội dung tài nguyên</label>
+              <textarea id="order-item"
+                placeholder="Link Drive, License Key... (hiển thị sau khi thanh toán)"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="order-note">Lời nhắn riêng</label>
+              <textarea id="order-note" placeholder="Lời nhắn cho khách..."></textarea>
+            </div>
+            <button type="submit" class="btn-primary" id="btn-create">Tạo đơn hàng</button>
+          </form>
+        </div>
+
+        <!-- Modal edit -->
+        <div class="card" id="edit-card" style="display:none;">
+          <h3>Chỉnh sửa đơn <span id="edit-order-id" style="color:var(--primary)"></span></h3>
+          <form id="edit-form">
+            <div class="form-group">
+              <label>Tên khách</label>
+              <input type="text" id="edit-username" />
+            </div>
+            <div class="form-group">
+              <label>Số tiền (VNĐ)</label>
+              <input type="number" id="edit-amount" />
+            </div>
+            <div class="form-group">
+              <label>Tài nguyên</label>
+              <textarea id="edit-item"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Lời nhắn</label>
+              <textarea id="edit-note"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Trạng thái</label>
+              <select id="edit-status"
+                style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:6px; font-family:inherit; font-size:0.85rem;">
+                <option value="PENDING">PENDING</option>
+                <option value="PAID">PAID</option>
+                <option value="PARTIALLY_PAID">PARTIALLY_PAID</option>
+                <option value="EXPIRED">EXPIRED</option>
+              </select>
+            </div>
+            <button type="submit" class="btn-primary">Lưu thay đổi</button>
+            <button type="button" class="btn-primary" id="btn-cancel-edit"
+              style="background:var(--text-light); margin-top:0.5rem;">Hủy</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Cột phải: Danh sách đơn hàng -->
+      <div class="split-right">
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+            <h3 style="margin-bottom:0">Danh sách đơn hàng</h3>
+            <button class="btn-primary" id="btn-refresh-orders"
+              style="width:auto; padding:0.4rem 1rem; font-size:0.8rem;">Tải lại</button>
+          </div>
+          <div id="orders-container">
+            <p style="color:var(--text-light); font-size:0.85rem;">Nhập mật khẩu và nhấn "Tải lại" để xem đơn hàng.</p>
+          </div>
+        </div>
+
+        <!-- Lịch sử giao dịch -->
+        <div class="card" id="tx-card" style="display:none;">
+          <h3>Lịch sử giao dịch - <span id="tx-order-id" style="color:var(--primary)"></span></h3>
+          <div id="tx-container"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/payment-admin.js"></script>
+</body>
+
+</html>
