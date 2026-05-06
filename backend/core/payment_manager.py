@@ -389,8 +389,8 @@ def build_checkout_fields(settings: Settings, order: dict) -> dict:
 def get_checkout_url(settings: Settings) -> str:
     """Trả về URL của SePay checkout tuỳ theo môi trường."""
     if settings.sepay_env == "production":
-        return "https://pgapi.sepay.vn/v1/checkout/init"
-    return "https://pgapi-sandbox.sepay.vn/v1/checkout/init"
+        return "https://pay.sepay.vn/v1/checkout/init"
+    return "https://pay-sandbox.sepay.vn/v1/checkout/init"
 
 
 def _save_invoice_number(settings: Settings, order_id: str, invoice_number: str):
