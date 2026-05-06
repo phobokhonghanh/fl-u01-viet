@@ -38,6 +38,8 @@ async def startup_event():
         from config.settings import Settings
         from core.payment_manager import init_db
         settings = Settings.from_env()
+        print(settings)
+        print(settings.database_url)
         init_db(settings)
     except Exception as e:
         logger.warning(f"Không thể khởi tạo payment DB: {e}")

@@ -38,21 +38,25 @@ class Settings:
     def from_env(cls, env_path: Optional[str] = None) -> "Settings":
         load_dotenv(dotenv_path=env_path)
 
+        def get_env(key: str, default: Optional[str] = None) -> Optional[str]:
+            val = os.getenv(key, default)
+            return val.strip() if val else val
+
         return cls(
-            pass_admin=os.getenv("PASS_ADMIN", "admin"),
-            keys_filename=os.getenv("KEYS_FILENAME", "keys.json"),
-            retry_max_attempts=int(os.getenv("RETRY_MAX_ATTEMPTS", "10")),
-            retry_initial_delay=float(os.getenv("RETRY_INITIAL_DELAY", "15.0")),
-            retry_backoff_factor=float(os.getenv("RETRY_BACKOFF_FACTOR", "1.5")),
-            s3_region=os.getenv("S3_REGION"),
-            s3_endpoint=os.getenv("S3_ENDPOINT"),
-            s3_access_key=os.getenv("S3_ACCESS_KEY"),
-            s3_secret_key=os.getenv("S3_SECRET_KEY"),
-            s3_bucket=os.getenv("S3_BUCKET_NAME"),
-            database_url=os.getenv("DATABASE_URL"),
-            sepay_merchant_id=os.getenv("SEPAY_MERCHANT_ID"),
-            sepay_secret_key=os.getenv("SEPAY_SECRET_KEY"),
-            sepay_env=os.getenv("SEPAY_ENV", "sandbox"),
-            sepay_ipn_secret_key=os.getenv("SEPAY_IPN_SECRET_KEY"),
-            frontend_base_url=os.getenv("FRONTEND_BASE_URL", "http://localhost:3000"),
+            pass_admin=get_env("PASS_ADMIN", "admin"),
+            keys_filename=get_env("KEYS_FILENAME", "keys.json"),
+            retry_max_attempts=int(get_env("RETRY_MAX_ATTEMPTS", "10")),
+            retry_initial_delay=float(get_env("RETRY_INITIAL_DELAY", "15.0")),
+            retry_backoff_factor=float(get_env("RETRY_BACKOFF_FACTOR", "1.5")),
+            s3_region=get_env("S3_REGION"),
+            s3_endpoint=get_env("S3_ENDPOINT"),
+            s3_access_key=get_env("S3_ACCESS_KEY"),
+            s3_secret_key=get_env("S3_SECRET_KEY"),
+            s3_bucket=get_env("S3_BUCKET_NAME"),
+            database_url=get_env("DATABASE_URL"),
+            sepay_merchant_id=get_env("SEPAY_MERCHANT_ID"),
+            sepay_secret_key=get_env("SEPAY_SECRET_KEY"),
+            sepay_env=get_env("SEPAY_ENV", "sandbox"),
+            sepay_ipn_secret_key=get_env("SEPAY_IPN_SECRET_KEY"),
+            frontend_base_url=get_env("FRONTEND_BASE_URL", "http://localhost:3000"),
         )
