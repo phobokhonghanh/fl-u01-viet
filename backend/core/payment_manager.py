@@ -297,11 +297,19 @@ def process_webhook(settings: Settings, sepay_data: dict) -> Optional[Tuple[str,
 # SePay Payment Gateway — Checkout & IPN
 # =====================================================================
 
-# Thứ tự fields bắt buộc theo tài liệu SePay để tạo chữ ký
-_SIGN_FIELD_ORDER = [
-    "order_amount", "merchant", "currency", "operation",
-    "order_description", "order_invoice_number", "payment_method",
-    "success_url", "error_url", "cancel_url",
+# Thứ tự fields dùng chung cho chữ ký và form, khớp danh sách signed fields của SePay.
+_CHECKOUT_FIELD_ORDER = [
+    "merchant",
+    "operation",
+    "payment_method",
+    "order_amount",
+    "currency",
+    "order_invoice_number",
+    "order_description",
+    "customer_id",
+    "success_url",
+    "error_url",
+    "cancel_url",
 ]
 
 
@@ -311,7 +319,7 @@ def _build_signature(fields: dict, secret_key: str) -> str:
     Format: base64(HMAC-SHA256("field1=val1,field2=val2,...", secret_key))
     """
     parts = []
-    for field in _SIGN_FIELD_ORDER:
+    for field in _CHECKOUT_FIELD_ORDER:
         if field in fields and fields[field] is not None:
             parts.append(f"{field}={fields[field]}")
     message = ",".join(parts)
@@ -349,35 +357,22 @@ def build_checkout_fields(settings: Settings, order: dict) -> dict:
     # Dùng order_id làm invoice_number để IPN tìm lại đơn hàng
     invoice_number = f"INV-{order_id}-{int(time.time())}"
 
-    # Thứ tự fields theo đúng template tài liệu SePay để form HTML không bị lỗi signature
-    _FIELD_ORDER = [
-        "merchant",
-        "currency",
-        "order_amount",
-        "operation",
-        "order_description",
-        "order_invoice_number",
-        "payment_method",
-        "success_url",
-        "error_url",
-        "cancel_url",
-    ]
-
     raw_fields = {
         "merchant":             settings.sepay_merchant_id,
-        "currency":             "VND",
-        "order_amount":         str(int(order["amount"])),
         "operation":            "PURCHASE",
-        "order_description":    f"Thanh toan don hang {order_id}",
-        "order_invoice_number": invoice_number,
         "payment_method":       "BANK_TRANSFER",
+        "order_amount":         str(int(order["amount"])),
+        "currency":             "VND",
+        "order_invoice_number": invoice_number,
+        "order_description":    f"Thanh toan don hang {order_id}",
+        "customer_id":          f"CUST-{order_id}",
         "success_url":          success_url,
         "error_url":            error_url,
         "cancel_url":           cancel_url,
     }
 
-    # Tạo dict có thứ tự (Python 3.7+ giữ insertion order) để signature và output đúng thứ tự
-    fields = {k: raw_fields[k] for k in _FIELD_ORDER}
+    # Python 3.7+ giữ insertion order; form frontend render đúng theo order này.
+    fields = {k: raw_fields[k] for k in _CHECKOUT_FIELD_ORDER}
     fields["signature"] = _build_signature(fields, settings.sepay_secret_key)
 
     # Lưu invoice_number vào DB để IPN có thể mapping về order
