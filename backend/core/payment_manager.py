@@ -61,17 +61,6 @@ def init_db(settings: Settings):
             """)
         conn.commit()
         
-        # Thêm cột transaction_id cho database đã tồn tại
-        try:
-            with conn.cursor() as cur:
-                cur.execute("ALTER TABLE transactions ADD COLUMN transaction_id VARCHAR(100) UNIQUE;")
-            conn.commit()
-            logger.info("Đã thêm cột transaction_id vào bảng transactions.")
-        except psycopg2.errors.DuplicateColumn:
-            conn.rollback()
-        except Exception:
-            conn.rollback()
-
         logger.info("Khởi tạo bảng orders và transactions thành công.")
     except Exception as e:
         conn.rollback()
@@ -323,10 +312,10 @@ def _build_signature(fields: dict, secret_key: str) -> str:
     """
     parts = []
     for field in _SIGN_FIELD_ORDER:
-        if field in fields and fields[field] is not None and fields[field] != "":
+        if field in fields and fields[field] is not None:
             parts.append(f"{field}={fields[field]}")
     message = ",".join(parts)
-    logger.debug(f"SePay signature string: {message}")
+    logger.info(f"SePay signature string: {message}")
     raw = hmac.new(
         secret_key.encode("utf-8"),
         message.encode("utf-8"),
