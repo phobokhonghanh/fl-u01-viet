@@ -160,29 +160,29 @@ async function initiateCheckout() {
 
         const { checkout_url, fields } = await res.json();
 
-        // Thứ tự fields cho SePay form — phải khớp với template tài liệu SePay
-        const SEPAY_FIELD_ORDER = [
-            "merchant", "currency", "order_amount", "operation",
-            "order_description", "order_invoice_number", "payment_method",
-            "success_url", "error_url", "cancel_url", "signature",
-        ];
-
         // Tạo form ẩn và submit sang SePay
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = checkout_url;
         form.style.display = 'none';
 
-        // Tạo input theo đúng thứ tự SePay yêu cầu
-        for (const name of SEPAY_FIELD_ORDER) {
-            if (name in fields) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = name;
-                input.value = fields[name];
-                form.appendChild(input);
-            }
+        // Render theo thứ tự object backend đã ký, giống cách SDK SePay dựng form.
+        for (const [name, value] of Object.entries(fields)) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
         }
+
+        console.group('SePay checkout form');
+        console.log('POST', checkout_url);
+        console.table(Array.from(form.elements).map((input, index) => ({
+            order: index + 1,
+            name: input.name,
+            value: input.value,
+        })));
+        console.groupEnd();
 
         document.body.appendChild(form);
         form.submit();
