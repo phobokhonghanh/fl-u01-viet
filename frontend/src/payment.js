@@ -175,6 +175,15 @@ async function initiateCheckout() {
             form.appendChild(input);
         }
 
+        console.group('SePay checkout form');
+        console.log('POST', checkout_url);
+        console.table(Array.from(form.elements).map((input, index) => ({
+            order: index + 1,
+            name: input.name,
+            value: input.value,
+        })));
+        console.groupEnd();
+
         document.body.appendChild(form);
         form.submit();
 
