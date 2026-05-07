@@ -1,5 +1,5 @@
 // Payment Page Logic - AutoHDR (SePay Payment Gateway)
-const API_BASE = import.meta.env?.VITE_API_BASE || "https://autohdr-backend.up.railway.app";
+const API_BASE = import.meta.env?.VITE_API_BASE || "";
 
 const card = document.getElementById('main-card');
 
@@ -30,11 +30,38 @@ function escapeHtml(str) {
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function normalizeItemUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw || /\s/.test(raw)) return null;
+
+    const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+    try {
+        const url = new URL(candidate);
+        if (!['http:', 'https:'].includes(url.protocol)) return null;
+        if (!url.hostname.includes('.') && url.hostname !== 'localhost') return null;
+        return url.href;
+    } catch (_) {
+        return null;
+    }
+}
+
+function renderItemContent(item) {
+    const itemUrl = normalizeItemUrl(item);
+    if (itemUrl) {
+        return `
+            <a class="item-link" href="${escapeHtml(itemUrl)}" target="_blank" rel="noopener noreferrer">
+                Mở liên kết
+            </a>`;
+    }
+    return `<div class="item-box">${escapeHtml(item)}</div>`;
+}
+
 // === Render ===
 function renderError(message) {
     card.innerHTML = `
         <div class="error-box fade-in">
-            <h2>⚠️ Không tìm thấy đơn hàng</h2>
+            <h2>Không tìm thấy đơn hàng</h2>
             <p>${message}</p>
             <p style="margin-top:0.75rem;">Vui lòng kiểm tra lại link hoặc liên hệ người bán.</p>
         </div>`;
@@ -83,8 +110,8 @@ function renderOrder(order) {
     if (isPaid && order.item) {
         contentSection = `
             <hr class="divider">
-            <div class="section-label">📦 Nội dung nhận hàng</div>
-            <div class="item-box">${escapeHtml(order.item)}</div>`;
+            <div class="section-label">Nội dung</div>
+            ${renderItemContent(order.item)}`;
     }
     if (order.note) {
         contentSection += `
@@ -115,7 +142,7 @@ function renderOrder(order) {
                 <span class="status-badge status-${order.status}">${statusLabel(order.status)}</span>
             </div>
             <div class="amount-display">${formatCurrency(order.amount)}</div>
-            ${isPaid ? '<div style="text-align:center;color:var(--success);font-weight:600;margin-bottom:1rem;">✅ Thanh toán thành công!</div>' : ''}
+            ${isPaid ? '<div style="text-align:center;color:var(--success);font-weight:600;margin-bottom:1rem;">Thanh toán thành công!</div>' : ''}
             ${isExpired ? '<div class="waiting-box"><p>Đơn hàng này đã hết hạn. Vui lòng liên hệ người bán để được hỗ trợ.</p></div>' : ''}
             ${actionSection}
             ${contentSection}

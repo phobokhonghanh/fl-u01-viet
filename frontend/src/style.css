@@ -133,6 +133,9 @@ label {
 
 input[type="text"],
 input[type="email"],
+input[type="password"],
+input[type="number"],
+select,
 textarea {
   width: 100%;
   padding: 0.5rem 0.65rem;
@@ -558,12 +561,66 @@ textarea:focus {
 
 /* Responsive */
 @media (max-width: 768px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  .container {
+    margin: 0;
+    padding: 0.75rem;
+  }
+
+  header {
+    margin-bottom: 1rem;
+  }
+
+  header h1 {
+    font-size: 1.45rem;
+  }
+
   .split-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem;
+  }
+
+  .card {
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+  }
+
+  .card h3 {
+    font-size: 0.95rem;
+  }
+
+  .tabs {
+    overflow-x: auto;
+    padding-bottom: 0.1rem;
+  }
+
+  .tab-btn {
+    flex: 0 0 auto;
+    padding: 0.55rem 0.85rem;
   }
 
   .log-container {
     height: 400px;
+  }
+
+  .admin-footer-nav {
+    align-items: stretch;
+    gap: 0.45rem;
+    padding: 0.75rem;
+  }
+
+  .admin-footer-nav span {
+    width: 100%;
+    text-align: center;
+  }
+
+  .admin-footer-nav a {
+    flex: 1 1 130px;
+    text-align: center;
   }
 }
 
@@ -622,6 +679,166 @@ textarea:focus {
   color: #991b1b;
 }
 
+.admin-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  min-height: 120px;
+  color: var(--text-light);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.admin-loading-spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid #e2e8f0;
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.9rem;
+  color: var(--text-light);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.pagination-btn {
+  min-width: 72px;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.pagination-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 640px) {
+  .admin-table,
+  #keys-table {
+    border-collapse: separate !important;
+    border-spacing: 0 0.75rem !important;
+    font-size: 0.82rem !important;
+    margin-top: 0 !important;
+  }
+
+  .admin-table thead,
+  #keys-table thead {
+    display: none;
+  }
+
+  .admin-table tbody,
+  .admin-table tr,
+  .admin-table td,
+  #keys-table tbody,
+  #keys-table tr,
+  #keys-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .admin-table tr,
+  #keys-table tr {
+    overflow: hidden;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: var(--shadow);
+  }
+
+  .admin-table tr:hover,
+  #keys-table tr:hover {
+    background: #fff;
+  }
+
+  .admin-table td,
+  #keys-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    min-height: 42px;
+    padding: 0.65rem 0.75rem !important;
+    border-bottom: 1px solid var(--border) !important;
+    text-align: right !important;
+    word-break: break-word;
+  }
+
+  .admin-table td:last-child,
+  #keys-table td:last-child {
+    border-bottom: 0 !important;
+  }
+
+  .admin-table td::before,
+  #keys-table td::before {
+    content: attr(data-label);
+    flex: 0 0 94px;
+    text-align: left;
+    color: var(--text-light);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .admin-table td[data-label="Hành động"],
+  #keys-table td[data-label="Hành động"] {
+    align-items: stretch;
+    flex-direction: column;
+    text-align: left !important;
+  }
+
+  .admin-table td[data-label="Hành động"] > div {
+    width: 100%;
+  }
+
+  .admin-table td[data-label="Hành động"] .btn-action {
+    flex: 1 1 calc(50% - 0.35rem);
+    min-height: 36px;
+  }
+
+  .admin-table code,
+  #keys-table code {
+    max-width: 100%;
+    white-space: normal;
+    word-break: break-all;
+  }
+
+  #keys-table td[data-empty="true"],
+  .admin-table td[colspan] {
+    display: block;
+    text-align: center !important;
+  }
+
+  #keys-table td[data-empty="true"]::before,
+  .admin-table td[colspan]::before {
+    content: none;
+  }
+
+  .pagination {
+    justify-content: center;
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -643,5 +860,11 @@ textarea:focus {
 
   100% {
     opacity: 1;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
