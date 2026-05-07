@@ -559,6 +559,24 @@ textarea:focus {
   border-color: var(--primary);
 }
 
+.admin-footer-nav .admin-footer-credit {
+  flex: 0 0 100%;
+  padding: 0.15rem 0 0;
+  color: var(--text-light);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.5;
+  border: 0;
+  border-radius: 0;
+  text-align: center;
+}
+
+.admin-footer-nav .admin-footer-credit:hover {
+  background: transparent;
+  border-color: transparent;
+  color: var(--primary);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   body {
