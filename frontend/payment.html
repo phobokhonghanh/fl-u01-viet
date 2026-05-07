@@ -39,6 +39,12 @@
       text-align: center;
       margin-bottom: 1.5rem;
     }
+    .brand-logo {
+      display: block;
+      width: min(220px, 68vw);
+      height: auto;
+      margin: 0 auto 0.75rem;
+    }
     .logo h1 {
       font-size: 1.6rem;
       font-weight: 700;
@@ -238,6 +244,16 @@
       color: var(--text-light);
       margin-top: 1.25rem;
     }
+    .footer-credit {
+      display: block;
+      margin-top: 0.75rem;
+      text-align: center;
+      font-size: 0.72rem;
+      color: #64748b;
+      text-decoration: none;
+      line-height: 1.5;
+    }
+    .footer-credit:hover { color: var(--primary); }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
     .fade-in { animation: fadeIn 0.3s ease; }
@@ -246,8 +262,7 @@
 <body>
   <div class="wrapper">
     <div class="logo">
-      <h1>Client <span style="font-size:0.6em; background:#3b82f6; color:#fff; padding:2px 8px; border-radius:999px; vertical-align:middle;">PAY</span></h1>
-      <a href="https://www.facebook.com/nguyennef.ndn" style="font-size:0.78rem; color:#64748b; text-decoration:none;">by tuitenPhở</a>
+      <img class="brand-logo" src="./logo_nory.png" alt="Nory" />
     </div>
     <div class="card" id="main-card">
       <!-- JS sẽ render nội dung vào đây -->
@@ -257,6 +272,7 @@
       </div>
     </div>
     <p class="footer-note">Hãy <strong>bookmark</strong> trang này để nhận cập nhật sau thanh toán.</p>
+    <a class="footer-credit" href="https://www.facebook.com/ndinhnguyende/">© 2026 Nguyen Dinh Nguyen - Development & Maintenance Solutions. All rights reserved.</a>
   </div>
   <script type="module" src="/src/payment.js"></script>
 </body>
