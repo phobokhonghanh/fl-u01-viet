@@ -57,7 +57,7 @@ async function loadKeys() {
  */
 function renderKeys(keys) {
     if (!keys || keys.length === 0) {
-        keysBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-light);">Chưa có Key nào được tạo.</td></tr>`;
+        keysBody.innerHTML = `<tr><td colspan="5" data-empty="true" style="text-align: center; padding: 2rem; color: var(--text-light);">Chưa có Key nào được tạo.</td></tr>`;
         return;
     }
 
@@ -67,11 +67,11 @@ function renderKeys(keys) {
 
         return `
             <tr style="border-bottom: 1px solid var(--border);">
-                <td style="padding: 0.75rem;">${k.name}</td>
-                <td style="padding: 0.75rem;"><code style="background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-weight: 600;">${k.key}</code></td>
-                <td style="padding: 0.75rem;">${expires}</td>
-                <td style="padding: 0.75rem;">${machine}</td>
-                <td style="padding: 0.75rem; text-align: center;">
+                <td data-label="Tên" style="padding: 0.75rem;">${k.name}</td>
+                <td data-label="Key" style="padding: 0.75rem;"><code style="background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-weight: 600;">${k.key}</code></td>
+                <td data-label="Hạn dùng" style="padding: 0.75rem;">${expires}</td>
+                <td data-label="Máy khóa" style="padding: 0.75rem;">${machine}</td>
+                <td data-label="Hành động" style="padding: 0.75rem; text-align: center;">
                     <button class="btn-delete-key" data-key="${k.key}" style="background: none; border: none; color: #DC2626; cursor: pointer; font-weight: bold; font-size: 1.1rem;" title="Xóa key">&times;</button>
                 </td>
             </tr>

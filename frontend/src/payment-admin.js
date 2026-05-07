@@ -11,6 +11,9 @@ const txCard = document.getElementById('tx-card');
 const txContainer = document.getElementById('tx-container');
 
 let currentEditId = null;
+let allOrders = [];
+let currentOrdersPage = 1;
+const ORDERS_PER_PAGE = 10;
 
 // === Helpers ===
 function getPass() {
@@ -63,70 +66,127 @@ function showAlert(msg, type = 'info') {
     setTimeout(() => el.remove(), 3500);
 }
 
+function renderOrdersLoading() {
+    ordersContainer.innerHTML = `
+        <div class="admin-loading">
+            <div class="admin-loading-spinner"></div>
+            <span>Đang tải danh sách đơn hàng...</span>
+        </div>`;
+}
+
+function sortOrdersNewestFirst(orders) {
+    return [...orders].sort((a, b) => {
+        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+        return bTime - aTime;
+    });
+}
+
+function renderOrderPagination(totalOrders) {
+    const totalPages = Math.max(1, Math.ceil(totalOrders / ORDERS_PER_PAGE));
+    if (totalPages <= 1) return '';
+
+    return `
+        <div class="pagination">
+            <button class="pagination-btn" data-page-nav="prev" ${currentOrdersPage === 1 ? 'disabled' : ''}>Trước</button>
+            <span>Trang ${currentOrdersPage}/${totalPages}</span>
+            <button class="pagination-btn" data-page-nav="next" ${currentOrdersPage === totalPages ? 'disabled' : ''}>Sau</button>
+        </div>`;
+}
+
+function attachPaginationActions() {
+    document.querySelectorAll('[data-page-nav]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const totalPages = Math.max(1, Math.ceil(allOrders.length / ORDERS_PER_PAGE));
+            if (btn.dataset.pageNav === 'prev') {
+                currentOrdersPage = Math.max(1, currentOrdersPage - 1);
+            } else {
+                currentOrdersPage = Math.min(totalPages, currentOrdersPage + 1);
+            }
+            renderOrders();
+        });
+    });
+}
+
+function renderOrders() {
+    if (allOrders.length === 0) {
+        ordersContainer.innerHTML = '<p style="color:var(--text-light);font-size:0.85rem;">Chưa có đơn hàng nào.</p>';
+        return;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(allOrders.length / ORDERS_PER_PAGE));
+    currentOrdersPage = Math.min(Math.max(currentOrdersPage, 1), totalPages);
+
+    const start = (currentOrdersPage - 1) * ORDERS_PER_PAGE;
+    const orders = allOrders.slice(start, start + ORDERS_PER_PAGE);
+
+    ordersContainer.innerHTML = `
+        <div style="overflow-x:auto;">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Mã đơn</th>
+                        <th>Khách hàng</th>
+                        <th>Số tiền</th>
+                        <th>Trạng thái</th>
+                        <th>Ngày tạo</th>
+                        <th>Hành động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${orders.map(o => `
+                    <tr>
+                        <td data-label="Mã đơn"><code>${o.id}</code></td>
+                        <td data-label="Khách hàng">${escapeHtml(o.user_name)}</td>
+                        <td data-label="Số tiền">${formatCurrency(o.amount)}</td>
+                        <td data-label="Trạng thái">${statusBadge(o.status)}</td>
+                        <td data-label="Ngày tạo" style="font-size:0.75rem;color:var(--text-light);">${formatDate(o.created_at)}</td>
+                        <td data-label="Hành động">
+                             <div style="display:flex;gap:0.35rem;flex-wrap:wrap;">
+                                 <button class="btn-action" data-action="copy" data-id="${o.id}" data-token="${o.access_token}" title="Copy link thanh toán">Copy link</button>
+                                 <button class="btn-action" data-action="edit" data-id="${o.id}" data-name="${escapeHtml(o.user_name)}" data-amount="${o.amount}" data-item="${escapeHtml(o.item || '')}" data-note="${escapeHtml(o.note || '')}" data-status="${o.status}" title="Chỉnh sửa">Sửa</button>
+                                 <button class="btn-action" data-action="tx" data-id="${o.id}" title="Lịch sử giao dịch">Giao dịch</button>
+                                 <button class="btn-action btn-danger" data-action="delete" data-id="${o.id}" title="Xóa đơn">Xóa</button>
+                             </div>
+                        </td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>
+        ${renderOrderPagination(allOrders.length)}`;
+
+    document.querySelectorAll('.btn-action').forEach(btn => {
+        btn.style.cssText = 'background:#f1f5f9;border:1px solid var(--border);padding:0.25rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.85rem;';
+        btn.addEventListener('mouseenter', () => btn.style.background = '#e2e8f0');
+        btn.addEventListener('mouseleave', () => btn.style.background = '#f1f5f9');
+        if (btn.classList.contains('btn-danger')) {
+            btn.style.cssText += 'color:var(--error);';
+        }
+    });
+
+    attachOrderActions();
+    attachPaginationActions();
+}
+
 // === Load Orders ===
-async function loadOrders() {
+async function loadOrders({ resetPage = true } = {}) {
     const pass = getPass();
     if (!pass) { showAlert('Vui lòng nhập mật khẩu Admin', 'error'); return; }
 
+    renderOrdersLoading();
+
     try {
         const orders = await apiPost('/api/payment/admin/orders/list', { password: pass });
-
-        if (orders.length === 0) {
-            ordersContainer.innerHTML = '<p style="color:var(--text-light);font-size:0.85rem;">Chưa có đơn hàng nào.</p>';
-            return;
-        }
-
-        ordersContainer.innerHTML = `
-            <div style="overflow-x:auto;">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th>Mã đơn</th>
-                            <th>Khách hàng</th>
-                            <th>Số tiền</th>
-                            <th>Trạng thái</th>
-                            <th>Ngày tạo</th>
-                            <th>Hành động</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${orders.map(o => `
-                        <tr>
-                            <td><code>${o.id}</code></td>
-                            <td>${escapeHtml(o.user_name)}</td>
-                            <td>${formatCurrency(o.amount)}</td>
-                            <td>${statusBadge(o.status)}</td>
-                            <td style="font-size:0.75rem;color:var(--text-light);">${formatDate(o.created_at)}</td>
-                            <td>
-                                 <div style="display:flex;gap:0.35rem;flex-wrap:wrap;">
-                                     <button class="btn-action" data-action="copy" data-id="${o.id}" data-token="${o.access_token}" title="Copy link thanh toán">Copy link</button>
-                                     <button class="btn-action" data-action="edit" data-id="${o.id}" data-name="${escapeHtml(o.user_name)}" data-amount="${o.amount}" data-item="${escapeHtml(o.item || '')}" data-note="${escapeHtml(o.note || '')}" data-status="${o.status}" title="Chỉnh sửa">Sửa</button>
-                                     <button class="btn-action" data-action="tx" data-id="${o.id}" title="Lịch sử giao dịch">Giao dịch</button>
-                                     <button class="btn-action btn-danger" data-action="delete" data-id="${o.id}" title="Xóa đơn">Xóa</button>
-                                 </div>
-                            </td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>
-            </div>`;
-
-        // Add inline styles for action buttons
-        document.querySelectorAll('.btn-action').forEach(btn => {
-            btn.style.cssText = 'background:#f1f5f9;border:1px solid var(--border);padding:0.25rem 0.5rem;border-radius:4px;cursor:pointer;font-size:0.85rem;';
-            btn.addEventListener('mouseenter', () => btn.style.background = '#e2e8f0');
-            btn.addEventListener('mouseleave', () => btn.style.background = '#f1f5f9');
-            if (btn.classList.contains('btn-danger')) {
-                btn.style.cssText += 'color:var(--error);';
-            }
-        });
-
-        attachOrderActions(orders);
+        allOrders = sortOrdersNewestFirst(orders);
+        if (resetPage) currentOrdersPage = 1;
+        renderOrders();
     } catch (e) {
         showAlert(e.message, 'error');
+        ordersContainer.innerHTML = '<p style="color:var(--error);font-size:0.85rem;">Không thể tải danh sách đơn hàng.</p>';
     }
 }
 
-function attachOrderActions(orders) {
+function attachOrderActions() {
     document.querySelectorAll('[data-action]').forEach(btn => {
         btn.addEventListener('click', async () => {
             const action = btn.dataset.action;
@@ -159,7 +219,7 @@ function attachOrderActions(orders) {
                 try {
                     await apiPost(`/api/payment/admin/orders/delete/${id}`, { password: getPass() });
                     showAlert('Đã xóa đơn hàng.', 'success');
-                    loadOrders();
+                    loadOrders({ resetPage: false });
                 } catch (e) {
                     showAlert(e.message, 'error');
                 }
@@ -187,10 +247,10 @@ async function loadTransactions(orderId) {
                 <tbody>
                     ${txs.map((tx, i) => `
                     <tr>
-                        <td>${i + 1}</td>
-                        <td style="color:var(--success);font-weight:600;">${formatCurrency(tx.transfer_amount)}</td>
-                        <td style="font-size:0.8rem;">${escapeHtml(tx.content)}</td>
-                        <td style="font-size:0.75rem;color:var(--text-light);">${formatDate(tx.created_at)}</td>
+                        <td data-label="#">${i + 1}</td>
+                        <td data-label="Số tiền" style="color:var(--success);font-weight:600;">${formatCurrency(tx.transfer_amount)}</td>
+                        <td data-label="Nội dung CK" style="font-size:0.8rem;">${escapeHtml(tx.content)}</td>
+                        <td data-label="Thời gian" style="font-size:0.75rem;color:var(--text-light);">${formatDate(tx.created_at)}</td>
                     </tr>`).join('')}
                 </tbody>
             </table>`;
@@ -221,11 +281,10 @@ orderForm.addEventListener('submit', async (e) => {
             item: document.getElementById('order-item').value,
             note: document.getElementById('order-note').value,
         });
-        const link = buildLink(order);
-        await navigator.clipboard.writeText(link);
-        showAlert(`Tạo đơn #${order.id} thành công! Link đã copy vào clipboard.`, 'success');
+        showAlert(`Tạo đơn #${order.id} thành công!`, 'success');
         orderForm.reset();
-        loadOrders();
+        adminPassInput.value = pass;
+        await loadOrders();
     } catch (e) {
         showAlert(e.message, 'error');
     } finally {
@@ -248,7 +307,7 @@ editForm.addEventListener('submit', async (e) => {
         showAlert('Cập nhật thành công!', 'success');
         editCard.style.display = 'none';
         currentEditId = null;
-        loadOrders();
+        loadOrders({ resetPage: false });
     } catch (e) {
         showAlert(e.message, 'error');
     }
