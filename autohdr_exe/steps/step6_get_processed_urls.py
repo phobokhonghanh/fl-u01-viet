@@ -14,14 +14,6 @@ from core.logger import log
 
 logger = logging.getLogger(__name__)
 
-
-def _clean_url(url: str) -> str:
-    """Remove query parameters from a URL."""
-    parsed = urlparse(url)
-    clean = urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
-    return clean
-
-
 def execute(
     client: HttpClient,
     photoshoot_id: int,
@@ -53,20 +45,36 @@ def execute(
         response.raise_for_status()
         data = response.json()
     except Exception as e:
-        _log("ERROR", f"Lỗi lấy processed photos: {e}")
+        _log("ERROR", f"Lỗi 6.1")
+        # Lỗi lấy processed photos: {e} 
         return []
 
     if not isinstance(data, list):
-        _log("ERROR", f"Response format không đúng: {type(data)}")
+        _log("ERROR", f"Lỗi 6.2")
+        # Response format không đúng: {type(data)}
         return []
 
     if len(data) == 0:
-        _log("ERROR", f"Không có processed photos")
+        _log("ERROR", f"Lỗi 6.3")
+        # Không có processed photos
         return []
 
     # Extract and clean URLs
-    raw_urls = [item.get("url", "") for item in data if item.get("url")]
-    # cleaned_urls = [_clean_url(u) for u in raw_urls]
+    ids = [item.get("id", "") for item in data if item.get("id")]
 
-    _log("INFO", f"Tìm thấy {len(raw_urls)} ảnh đã xử lý")
-    return raw_urls
+    urls=[]
+    
+    for id in ids:
+        try:
+            url = f"/api/proxy/photos/{id}/adjustments"
+            response = client.get(url)
+            response.raise_for_status()
+            adjustments = response.json()
+            urls.extend([adjustments.get("base_url")])
+        except Exception as e:
+            _log("ERROR", f"Lỗi 6.4")
+            # Lỗi lấy adjustments: {e}
+            return []
+    
+    _log("INFO", f"Tìm thấy {len(urls)} ảnh đã xử lý")
+    return urls

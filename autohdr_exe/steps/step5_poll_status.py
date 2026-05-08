@@ -79,7 +79,6 @@ def execute(
             return None
 
         # Fetch photoshoots
-        _log("INFO", f"Đang kiểm tra trạng thái... (lần {attempt + 1}/{max_retries + 1})")
         data = _fetch_photoshoots(client, user_id, photoshoot_limit)
         
         status = None
@@ -111,10 +110,9 @@ def execute(
         elif status in ["in_progress", "failure"]:
             if attempt < max_retries:
                 minutes_approx = delay / 60
-                msg_prefix = "Server đang xử lý" if status == "in_progress" else "Lỗi hệ thống/Không tìm thấy"
                 _log(
                     "INFO",
-                    f"{msg_prefix}... Retry {attempt + 1}/{max_retries}, "
+                    f"{status}... Kiểm tra {attempt + 1}/{max_retries}, "
                     f"đợi {delay:.0f}s (~{minutes_approx:.1f} phút)"
                 )
                 # Sleep in small chunks to check cancellation
@@ -125,8 +123,8 @@ def execute(
                         return None
                     time.sleep(1)
                 delay *= backoff_factor
-                if delay > 200:
-                    delay = 120
+                if delay > 150:
+                    delay = initial_delay
             else:
                 _log("ERROR", "Server quá tải, hãy thử lại sau.")
                 return None

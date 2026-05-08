@@ -60,7 +60,7 @@ def _download_single_file(
     client: HttpClient,
     url: str,
     output_path: str,
-    max_retries: int = 3,
+    max_retries: int = 10,
     on_log: Optional[Callable] = None,
 ) -> bool:
     """Download a single file with streaming write and retry logic."""
@@ -84,8 +84,7 @@ def _download_single_file(
                         f.write(chunk)
             return True
         except Exception as e:
-            msg = f"Download retry {attempt + 1}/{max_retries}: {e}"
-            log(logger, "WARNING", 7, msg)
+            msg = f"Download retry {attempt + 1}/{max_retries}"
             if on_log:
                 try:
                     on_log("WARNING", 7, msg)

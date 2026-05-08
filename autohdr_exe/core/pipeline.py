@@ -376,35 +376,35 @@ class PipelineManager:
 
             # === Step 1 ===
             if start_step <= 1:
-                _log("INFO", 1, "=== Step 1: Tạo presigned URLs ===")
+                _log("INFO", 1, "Tạo URLs")
                 if check_cancelled():
                     raise InterruptedError()
                 context = step1_presigned_urls.execute(client, context)
                 if context is None:
-                    raise Exception("Step 1 thất bại: Không tạo được presigned URLs")
+                    raise Exception("Thất bại: Không tạo được URLs")
 
             # === Step 2 ===
             if start_step <= 2:
-                _log("INFO", 2, f"=== Step 2: Upload {len(context.presigned_urls)} ảnh lên S3 ===")
+                _log("INFO", 2, f"Upload {len(context.presigned_urls)} ảnh")
                 if check_cancelled():
                     raise InterruptedError()
                 upload_ok = step2_upload_files.execute(client, context, check_cancelled)
                 if not upload_ok:
-                    raise Exception("Step 2 thất bại: Upload ảnh lỗi")
+                    raise Exception("Thất bại: Upload ảnh lỗi")
                 # Memory cleanup after upload
                 gc.collect()
 
             # === Step 3 ===
             if start_step <= 3:
-                _log("INFO", 3, "=== Step 3: Finalize Upload ===")
+                _log("INFO", 3, "Kiểm tra Upload")
                 if check_cancelled():
                     raise InterruptedError()
                 if not step3_finalize_upload.execute(client, context.unique_str):
-                    raise Exception("Step 3 thất bại: Finalize upload lỗi")
+                    raise Exception("Thất bại: Kiểm tra upload lỗi")
 
             # === Step 4 ===
             if start_step <= 4:
-                _log("INFO", 4, "=== Step 4: Kích hoạt xử lý HDR ===")
+                _log("INFO", 4, "Kích hoạt xử lý")
                 if check_cancelled():
                     raise InterruptedError()
                 if not step4_associate_and_run.execute(
@@ -418,12 +418,12 @@ class PipelineManager:
                     indoor_model_id=indoor_model_id,
                     outdoor_model_id=outdoor_model_id,
                 ):
-                    raise Exception("Step 4 thất bại: Không kích hoạt được xử lý")
+                    raise Exception("Thất bại: Không kích hoạt được xử lý")
             
             can_checkpoint = True
 
             # === Step 5 ===
-            _log("INFO", 5, "=== Step 5: Chờ server xử lý ===")
+            _log("INFO", 5, "Kiểm tra trạng thái xử lý")
             photoshoot_id = step5_poll_status.execute(
                 client=client,
                 user_id=context.user_id,
@@ -433,11 +433,11 @@ class PipelineManager:
                 on_log=_log,
             )
             if photoshoot_id is None:
-                raise Exception("Step 5 thất bại: Server không xử lý xong")
+                raise Exception("Thất bại: Không tìm thấy Photoshoot ID")
             context.photoshoot_id = photoshoot_id
 
             # === Step 6 ===
-            _log("INFO", 6, "=== Step 6: Lấy URLs ảnh đã xử lý ===")
+            _log("INFO", 6, "Lấy urls ảnh đã xử lý")
             if check_cancelled():
                 raise InterruptedError()
             context.processed_urls = step6_get_processed_urls.execute(
@@ -448,10 +448,10 @@ class PipelineManager:
                 on_log=_log,
             )
             if not context.processed_urls:
-                raise Exception("Step 6 thất bại: Không tìm thấy ảnh đã xử lý")
+                raise Exception("Thất bại: Không tìm thấy urls")
 
             # === Step 7 ===
-            _log("INFO", 7, f"=== Step 7: Tải {len(context.processed_urls)} ảnh HDR ===")
+            _log("INFO", 7, f"Tải {len(context.processed_urls)} ảnh")
             downloaded = step7_download_photos.execute(
                 client=client,
                 cleaned_urls=context.processed_urls,
@@ -470,7 +470,7 @@ class PipelineManager:
 
             job.downloaded_count = len(downloaded)
             job.status = "completed"
-            _log("INFO", 0, f"=== Pipeline hoàn tất! Đã tải {len(downloaded)} ảnh ===")
+            _log("INFO", 0, f"Đã tải {len(downloaded)} ảnh")
             
             # Successful completion -> Delete checkpoint
             _delete_checkpoint()
@@ -481,7 +481,7 @@ class PipelineManager:
         except Exception as e:
             job.status = "failed"
             job.error = str(e)
-            _log("ERROR", 0, f"Pipeline lỗi: {e}")
+            _log("ERROR", 0, f"Pipeline lỗi")
             
             # Save checkpoint if failure occurred after Step 4
             if can_checkpoint:
@@ -489,6 +489,163 @@ class PipelineManager:
         finally:
             # === Resource Cleanup ===
             # Close HTTP session to release TCP connections
+            if client:
+                client.close()
+
+            # Close job logger handlers
+            for h in job_logger.handlers[:]:
+                h.close()
+                job_logger.removeHandler(h)
+
+            # Final GC
+            gc.collect()
+
+        self._notify_update(job)
+
+    def run_pipeline_share(
+        self,
+        session: SessionRecord,
+        photoshoot_uuid: str,
+        address: str,
+        download_dir: str,
+        on_log: Optional[Callable[[str, str], None]] = None,
+        on_job_update: Optional[Callable[["Job"], None]] = None,
+        proxy_config: Optional[dict] = None,
+    ) -> Job:
+        """Create and start a new pipeline job for a shared photoshoot URL (by UUID)."""
+        job_id = str(uuid.uuid4())[:8]
+        job = Job(job_id=job_id, address=address, file_count=0)
+
+        with self._lock:
+            self.jobs[job_id] = job
+            self._callbacks[job_id] = {
+                "on_log": on_log,
+                "on_job_update": on_job_update
+            }
+
+        thread = threading.Thread(
+            target=self._run_pipeline_share,
+            args=(job, session, photoshoot_uuid, address, download_dir, proxy_config),
+            daemon=True,
+        )
+        thread.start()
+        return job
+
+    def _run_pipeline_share(
+        self,
+        job: Job,
+        session: SessionRecord,
+        photoshoot_uuid: str,
+        address: str,
+        download_dir: str,
+        proxy_config: Optional[dict] = None,
+    ):
+        """Worker that fetches processed_photos for a shared UUID and downloads processed images."""
+        job.status = "processing"
+        self._notify_update(job)
+
+        job_logger = setup_job_logger(job.job_id)
+        client = None
+
+        def _log(level: str, step: int, msg: str):
+            log(logger, level, step, msg)
+            log(job_logger, level, step, msg)
+            now = datetime.datetime.now().strftime("%H:%M:%S")
+            formatted = f"[{now}] <{level}: {step}: {msg}>"
+
+            # Log rotation — keep only last MAX_LOG_LINES
+            if len(job.log_lines) >= MAX_LOG_LINES:
+                job.log_lines.pop(0)
+            job.log_lines.append(formatted)
+
+            callbacks = self._callbacks.get(job.job_id, {})
+            on_log_cb = callbacks.get("on_log")
+            if on_log_cb:
+                try:
+                    on_log_cb(job.job_id, formatted)
+                except Exception:
+                    pass
+
+        def check_cancelled():
+            return job.stop_requested
+
+        try:
+            _log("INFO", 6, f"Kiểm tra url share")
+            
+            # Initialize HTTP client
+            client = HttpClient(cookie=session.cookie if session else None)
+
+            # Apply proxy if configured
+            if proxy_config and proxy_config.get("ip"):
+                _log("INFO", 0, f"Sử dụng proxy: {proxy_config['ip']}:{proxy_config.get('port', '')}")
+                client.set_proxy(
+                    ip=proxy_config["ip"],
+                    port=proxy_config.get("port", ""),
+                    user=proxy_config.get("user", ""),
+                    password=proxy_config.get("password", ""),
+                )
+
+            # === Fetch processed_photos list for the shared UUID ===
+            url = f"/api/proxy/photoshoots/uuid/{photoshoot_uuid}/processed_photos?page=1&page_size=10"
+            try:
+                response = client.get(url)
+                response.raise_for_status()
+                data = response.json()
+            except Exception as e:
+                raise Exception(f"Không lấy được photoshoot_uuid")
+
+            if len(data) == 0:
+                raise Exception("Không có ảnh")
+
+            # Per decision, take first item's id as photoshoot_id
+            photoshoot_id = data.get("id")
+
+            if photoshoot_id is None:
+                raise Exception("Không tìm thấy photoshoot id")
+            
+            # === Step 6: Get processed urls (unique_str and filenames left empty) ===
+            context_processed = step6_get_processed_urls.execute(
+                client=client,
+                photoshoot_id=photoshoot_id,
+                unique_str="",
+                input_filenames=[],
+                on_log=_log,
+            )
+            if not context_processed:
+                raise Exception("Không tìm thấy processed urls")
+
+            # === Step 7: Download photos ===
+            _log("INFO", 7, f"Tải {len(context_processed)} ảnh")
+            downloaded = step7_download_photos.execute(
+                client=client,
+                cleaned_urls=context_processed,
+                unique_str="",
+                download_dir=download_dir,
+                check_cancelled=check_cancelled,
+                folder_name=job.job_id,
+                on_log=_log,
+            )
+
+            # Memory cleanup after download
+            gc.collect()
+
+            if downloaded:
+                job.output_path = os.path.dirname(downloaded[0])
+
+            job.downloaded_count = len(downloaded)
+            job.status = "completed"
+            _log("INFO", 0, f"Đã tải {len(downloaded)} ảnh từ share")
+
+        except InterruptedError:
+            job.status = "stopped"
+            _log("WARNING", 0, "Tiến trình đã dừng theo yêu cầu")
+        except Exception as e:
+            job.status = "failed"
+            job.error = str(e)
+            print(e.message)
+            _log("ERROR", 0, f"Share pipeline lỗi: {e}")
+        finally:
+            # === Resource Cleanup ===
             if client:
                 client.close()
 
