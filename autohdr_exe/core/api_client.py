@@ -1,5 +1,5 @@
 """
-API Client — Gọi API xác thực Key và tối ưu bằng Cache 24h.
+API Client — Gọi API xác thực Key và tối ưu bằng Cache 12h.
 """
 
 import requests
@@ -12,20 +12,26 @@ from core.utils import get_hwid
 
 logger = logging.getLogger(__name__)
 
-# Thời hạn Cache: 24 giờ (tính bằng giây)
-CACHE_DURATION = 24 * 60 * 60 
+# Thời hạn Cache: 12 giờ (tính bằng giây)
+CACHE_DURATION = 12 * 60 * 60
 
 class ApiClient:
-    """Client for backend key validation with 24h caching."""
+    """Client for backend key validation with 12h caching."""
 
     def __init__(self, base_url: Optional[str] = None):
         if not base_url:
-            base_url = os.getenv("AUTOHDR_API_BASE", "https://autohdr-backend.up.railway.app")
+            base_url = os.getenv("AUTOHDR_API_BASE", "https://u01-viet-backend.leapcell.app")
         self.base_url = base_url.rstrip("/")
+
+    def _clear_license_cache(self):
+        """Clear local license cache fields."""
+        cache.delete("active_key")
+        cache.delete("license_last_check")
+        cache.delete("license_machine_id")
 
     def check_key(self, key: str, machine_id: Optional[str] = None) -> bool:
         """
-        Kiểm tra Key qua API, sử dụng cache 24h để hạn chế request.
+        Kiểm tra Key qua API, sử dụng cache 12h để hạn chế request.
         """
         if not key:
             return False
@@ -33,15 +39,20 @@ class ApiClient:
         if not machine_id:
             machine_id = get_hwid()
 
-        # --- 1. KIỂM TRA CACHE 24H ---
+        # --- 1. KIỂM TRA CACHE 12H ---
         # Lấy thông tin từ core.cache (lưu trong file .cache nội bộ)
         last_check = cache.get("license_last_check", 0)
         cached_key = cache.get("active_key")
+        cached_machine_id = cache.get("license_machine_id", "")
         
         now = time.time()
         
-        # Nếu Key đang nhập khớp với Key đã xác thực thành công VÀ chưa quá 24h
-        if cached_key == key and (now - float(last_check)) < CACHE_DURATION:
+        # Cache chỉ hợp lệ khi key + machine_id khớp và chưa quá TTL
+        if (
+            cached_key == key
+            and cached_machine_id == machine_id
+            and (now - float(last_check)) < CACHE_DURATION
+        ):
             return True
 
         # --- 2. GỌI API THỰC TẾ ---
@@ -59,10 +70,12 @@ class ApiClient:
                 if is_valid:
                     cache.set("active_key", key)
                     cache.set("license_last_check", now)
+                    cache.set("license_machine_id", machine_id)
                 return is_valid
                 
             elif res.status_code == 403:
                 # Key bị khóa hoặc sai machine_id
+                self._clear_license_cache()
                 return False
                 
             res.raise_for_status()

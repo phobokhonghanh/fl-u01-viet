@@ -29,7 +29,7 @@ class ScreenKey(ctk.CTkFrame):
         # Title
         ctk.CTkLabel(
             center_frame,
-            text="AutoHDR - v2.1",
+            text="AutoHDR - v3",
             font=("Arial", 28, "bold"),
         ).pack(pady=(0, 30))
 

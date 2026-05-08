@@ -562,7 +562,6 @@ class ScreenMain(ctk.CTkFrame):
             # Re-check key in background
             if not self.api.check_key(key, self.app.hwid):
                 self.after(0, lambda: self.btn_process.configure(state="normal", text="BẮT ĐẦU XỬ LÝ"))
-                cache.delete("active_key")
                 self.after(0, lambda: self.app.show_key_screen())
                 return
 
@@ -636,7 +635,6 @@ class ScreenMain(ctk.CTkFrame):
         def _do_check_and_start():
             if not self.api.check_key(key, self.app.hwid):
                 self.after(0, lambda: self.btn_process.configure(state="normal", text="BẮT ĐẦU XỬ LÝ"))
-                cache.delete("active_key")
                 self.after(0, lambda: self.app.show_key_screen())
                 return
 
