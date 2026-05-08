@@ -30,6 +30,7 @@ import datetime
 import platform
 import subprocess
 import customtkinter as ctk
+import re
 from tkinter import filedialog
 from tkinterdnd2 import DND_FILES
 
@@ -147,6 +148,10 @@ class ScreenMain(ctk.CTkFrame):
         if self.current_session:
             self.email_label.configure(text=f"Email: {self.current_session.email}", text_color="#22C55E")
 
+        # Mode buttons were previously in the top bar; they are placed
+        # beside Project/Mode (above the drop zone) so they sit just
+        # above the drop area for easier access.
+
         # Right side: Key button
         ctk.CTkButton(
             top_bar, text="🔑 Nhập Key", width=120, height=35,
@@ -170,26 +175,30 @@ class ScreenMain(ctk.CTkFrame):
         left_panel = ctk.CTkFrame(content_frame)
         left_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
         left_panel.grid_columnconfigure(0, weight=1)
-        left_panel.grid_rowconfigure(0, weight=1)  # Job list takes top half
-        left_panel.grid_rowconfigure(1, weight=1)  # Drop zone takes bottom half
-        left_panel.grid_rowconfigure(2, weight=0)  # Controls
+        left_panel.grid_rowconfigure(0, weight=0)  # Mode buttons
+        left_panel.grid_rowconfigure(1, weight=0)  # Project/Mode
+        left_panel.grid_rowconfigure(2, weight=1)  # Drop zone absorbs available height
+        left_panel.grid_rowconfigure(3, weight=0)  # Job header
+        left_panel.grid_rowconfigure(4, weight=0, minsize=160)  # Compact job list, close to controls
+        left_panel.grid_rowconfigure(5, weight=0)  # Controls
 
         # --- Job List ---
+        # Job header (will sit above the job list)
         job_header = ctk.CTkFrame(left_panel, fg_color="transparent")
-        job_header.grid(row=0, column=0, sticky="new", padx=8, pady=(8, 0))
+        job_header.grid(row=3, column=0, sticky="new", padx=8, pady=(8, 0))
         ctk.CTkLabel(job_header, text="Danh sách Jobs", font=("Arial", 18, "bold")).pack(side="left", anchor="w")
-        
-        # Scan failed jobs button
+        # Scan failed jobs button (with job list)
         self.btn_scan_failed = ctk.CTkButton(
-            job_header, text="Quét job lỗi", width=80, height=28,
+            job_header, text="Quét job lỗi", width=90, height=28,
             command=self._scan_recoverable_jobs,
             fg_color="#4B5563", hover_color="#374151",
             font=("Arial", 12, "bold")
         )
         self.btn_scan_failed.pack(side="right", padx=5)
 
-        self.job_list_frame = ctk.CTkScrollableFrame(left_panel, label_text="")
-        self.job_list_frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=(40, 5))
+        # Job list (below header)
+        self.job_list_frame = ctk.CTkScrollableFrame(left_panel, label_text="", height=160)
+        self.job_list_frame.grid(row=4, column=0, sticky="ew", padx=8, pady=(6, 4))
         
         # Bind mouse wheel for Linux
         self.job_list_frame.bind_all("<Button-4>", lambda e: self._on_mousewheel(e, self.job_list_frame))
@@ -197,7 +206,7 @@ class ScreenMain(ctk.CTkFrame):
 
         # --- Drop Zone ---
         drop_container = ctk.CTkFrame(left_panel, fg_color="transparent")
-        drop_container.grid(row=1, column=0, sticky="nsew", padx=8, pady=5)
+        drop_container.grid(row=2, column=0, sticky="nsew", padx=8, pady=5)
         drop_container.grid_rowconfigure(0, weight=1)
         drop_container.grid_columnconfigure(0, weight=1)
 
@@ -226,92 +235,65 @@ class ScreenMain(ctk.CTkFrame):
         self.img_count_label = ctk.CTkLabel(drop_container, text="0 files đã chọn", font=("Arial", 15, "bold"))
         self.img_count_label.grid(row=1, column=0, sticky="w", padx=5, pady=5)
 
-        # --- Controls ---
-        controls_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
-        controls_frame.grid(row=2, column=0, sticky="sew", padx=8, pady=(0, 8))
-        controls_frame.grid_columnconfigure(0, weight=1, uniform="col")
-        controls_frame.grid_columnconfigure(1, weight=1, uniform="col")
+        # Manual share URL entry (hidden by default)
+        self.share_url_entry = ctk.CTkEntry(drop_container, placeholder_text="Nhập url", height=34, font=("Arial", 13))
+        # Not gridded until Manual mode is enabled
 
-        # Container for Left side (Dir, Address, Process Button)
-        controls_left = ctk.CTkFrame(controls_frame, fg_color="transparent")
-        controls_left.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
-        
-        # Container for Right side (Proxy)
-        controls_right = ctk.CTkFrame(controls_frame, fg_color="transparent")
-        controls_right.grid(row=0, column=1, sticky="nsew", padx=(4, 0))
+        # Project and Mode inputs (side-by-side) inside drop area
+        # Project and Mode inputs are placed above the drop zone
+        # Mode buttons frame sits between the cookie/top-bar and Project/Mode
+        mode_buttons_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
+        mode_buttons_frame.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 8))
 
-        # --- LEFT: Download dir & Address ---
-        dir_frame = ctk.CTkFrame(controls_left, fg_color="transparent")
-        dir_frame.pack(fill="x", pady=(0, 3))
-
-        ctk.CTkLabel(dir_frame, text="📂 Lưu:", font=("Arial", 13)).pack(side="left", padx=2)
-        self.dir_entry = ctk.CTkEntry(dir_frame, height=30, font=("Arial", 13))
-        self.dir_entry.pack(side="left", fill="x", expand=True, padx=2)
-        cached_dir = cache.get("download_dir", os.path.expanduser("~/Downloads"))
-        self.dir_entry.insert(0, cached_dir)
-
-        ctk.CTkButton(dir_frame, text="...", width=30, height=30, command=self._select_dir, font=("Arial", 13, "bold")).pack(side="left", padx=2)
-
-        addr_frame = ctk.CTkFrame(controls_left, fg_color="transparent")
-        addr_frame.pack(fill="x", pady=(3, 8))
-        ctk.CTkLabel(addr_frame, text="Project:", font=("Arial", 13)).pack(side="left", padx=2)
-        
-        self.address_entry = ctk.CTkEntry(addr_frame, placeholder_text="Nhập Project name...", height=30, font=("Arial", 13))
+        self.project_mode_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
+        self.project_mode_frame.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 0))
+        # Project (left, expands)
+        ctk.CTkLabel(self.project_mode_frame, text="Project:", font=("Arial", 13)).pack(side="left", padx=2)
+        self.address_entry = ctk.CTkEntry(self.project_mode_frame, placeholder_text="Nhập Project name...", height=30, font=("Arial", 13))
         self.address_entry.pack(side="left", fill="x", expand=True, padx=2)
         self.address_entry.insert(0, cache.get("address", "Demo Project"))
-
-        mode_frame = ctk.CTkFrame(controls_left, fg_color="transparent")
-        mode_frame.pack(fill="x", pady=(0, 8))
-        ctk.CTkLabel(mode_frame, text="Mode:", font=("Arial", 13)).pack(side="left", padx=2)
-        
+        # Mode (right)
+        mode_container = ctk.CTkFrame(self.project_mode_frame, fg_color="transparent")
+        mode_container.pack(side="right", padx=(8, 0))
+        ctk.CTkLabel(mode_container, text="Mode:", font=("Arial", 13)).pack(side="left", padx=2)
         self.mode_var = ctk.StringVar(value=cache.get("mode", "Lisa"))
         self.mode_selector = ctk.CTkSegmentedButton(
-            mode_frame, 
+            mode_container,
             values=["Classic", "Lisa", "No Sky"],
             variable=self.mode_var,
             command=lambda v: cache.set("mode", v),
-            height=30
+            height=30,
         )
-        self.mode_selector.pack(side="left", fill="x", expand=True, padx=2)
-
-        # --- RIGHT: Proxy Settings ---
-        proxy_row1 = ctk.CTkFrame(controls_right, fg_color="transparent")
-        proxy_row1.pack(fill="x", pady=2)
-        
-        self.proxy_ip_entry = ctk.CTkEntry(proxy_row1, placeholder_text="IP proxy...", height=30, font=("Arial", 13))
-        self.proxy_ip_entry.pack(side="left", fill="x", expand=True, padx=(0, 3))
-        if cache.get("proxy_ip", ""):
-            self.proxy_ip_entry.insert(0, cache.get("proxy_ip", ""))
-        
-        self.proxy_port_entry = ctk.CTkEntry(proxy_row1, placeholder_text="Port...", height=30, font=("Arial", 13))
-        self.proxy_port_entry.pack(side="left", padx=(0, 0))
-        if cache.get("proxy_port", ""):
-            self.proxy_port_entry.insert(0, cache.get("proxy_port", ""))
-
-        proxy_row2 = ctk.CTkFrame(controls_right, fg_color="transparent")
-        proxy_row2.pack(fill="x", pady=3)
-        
-        self.proxy_user_entry = ctk.CTkEntry(proxy_row2, placeholder_text="Username...", height=30, font=("Arial", 13))
-        self.proxy_user_entry.pack(side="left", fill="x", expand=True, padx=(0, 3))
-        if cache.get("proxy_user", ""):
-            self.proxy_user_entry.insert(0, cache.get("proxy_user", ""))
-        
-        self.proxy_pass_entry = ctk.CTkEntry(proxy_row2, placeholder_text="Password...", height=30, font=("Arial", 13), show="*")
-        self.proxy_pass_entry.pack(side="left", fill="x", expand=True, padx=(0, 0))
-        if cache.get("proxy_pass", ""):
-            self.proxy_pass_entry.insert(0, cache.get("proxy_pass", ""))
-        
-        proxy_footer = ctk.CTkFrame(controls_right, fg_color="transparent")
-        proxy_footer.pack(fill="x", pady=(2, 0))
-        self.proxy_status_label = ctk.CTkLabel(proxy_footer, text="Proxy chưa sử dụng", font=("Arial", 12), text_color="gray")
-        self.proxy_status_label.pack(side="left")
-
-        ctk.CTkButton(
-            proxy_footer, text="Test", width=45, height=25,
-            command=self._test_proxy_async,
+        self.mode_selector.pack(side="left", fill="x")
+        # Mode buttons: Tự động / Thủ công (placed under cookie, above Project/Mode)
+        self.btn_manual = ctk.CTkButton(
+            mode_buttons_frame, text="URL", width=90, height=28,
+            command=lambda: self._set_manual_mode(True),
             fg_color="#6B7280", hover_color="#4B5563",
             font=("Arial", 12, "bold")
-        ).pack(side="left", padx=(8, 0))
+        )
+        self.btn_manual.pack(side="right", padx=5)
+
+        self.btn_auto = ctk.CTkButton(
+            mode_buttons_frame, text="FILE", width=80, height=28,
+            command=lambda: self._set_manual_mode(False),
+            fg_color="#059669", hover_color="#047857",
+            font=("Arial", 12, "bold")
+        )
+        self.btn_auto.pack(side="right", padx=5)
+
+        # --- Controls ---
+        controls_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
+        controls_frame.grid(row=5, column=0, sticky="ew", padx=8, pady=(0, 8))
+        controls_frame.grid_columnconfigure(0, weight=1)
+
+        # --- LEFT: Download dir & Address ---
+        # Note: download dir shown as clickable text below the Process button (simplified UI)
+
+        # Project and Mode inputs will be placed inside the drop area (see below)
+
+        # --- RIGHT: Proxy Settings ---
+        # Proxy UI removed (simplified UI)
 
         # Process button (Full Width spanning both columns)
         self.btn_process = ctk.CTkButton(
@@ -323,7 +305,19 @@ class ScreenMain(ctk.CTkFrame):
             height=40,
             font=("Arial", 16, "bold"),
         )
-        self.btn_process.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        self.btn_process.grid(row=0, column=0, sticky="ew")
+
+        # Download dir label (clickable) under the process button, left side
+        dir_display_frame = ctk.CTkFrame(controls_frame, fg_color="transparent")
+        dir_display_frame.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        self.download_dir = cache.get("download_dir", os.path.expanduser("~/Downloads"))
+        display_text = f"📁 {self.download_dir}"
+        self.dir_label = ctk.CTkLabel(dir_display_frame, text=display_text, font=("Arial", 12, "bold"), text_color="white", cursor="hand2")
+        self.dir_label.pack(side="left", anchor="w", padx=4)
+        self.dir_label.bind("<Button-1>", lambda e: self._select_dir())
+        # hover effect
+        self.dir_label.bind("<Enter>", lambda e: self.dir_label.configure(text_color="#22C55E"))
+        self.dir_label.bind("<Leave>", lambda e: self.dir_label.configure(text_color="gray"))
 
         # ============================
         # RIGHT PANEL — Per-Job Log
@@ -517,18 +511,24 @@ class ScreenMain(ctk.CTkFrame):
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     dir_path = result.stdout.strip()
-                    self.dir_entry.delete(0, "end")
-                    self.dir_entry.insert(0, dir_path)
+                    self.download_dir = dir_path
                     cache.set("download_dir", dir_path)
+                    try:
+                        self.dir_label.configure(text=f"📁 {dir_path}")
+                    except Exception:
+                        pass
                 return # Exit early out of fallback
             except Exception:
                 pass # Fallback to tkinter
                 
         dir_path = filedialog.askdirectory(title="Chọn thư mục lưu ảnh")
         if dir_path:
-            self.dir_entry.delete(0, "end")
-            self.dir_entry.insert(0, dir_path)
+            self.download_dir = dir_path
             cache.set("download_dir", dir_path)
+            try:
+                self.dir_label.configure(text=f"📁 {dir_path}")
+            except Exception:
+                pass
 
     # ==================================================
     # Process Pipeline
@@ -536,6 +536,10 @@ class ScreenMain(ctk.CTkFrame):
 
     def _start_process_async(self):
         """Validate and start pipeline in background to avoid UI lag."""
+        # Route to manual flow when manual mode is active
+        if getattr(self, 'is_manual_mode', False):
+            return self._start_manual_process_async()
+
         if not self.selected_files:
             return
 
@@ -568,56 +572,124 @@ class ScreenMain(ctk.CTkFrame):
         thread = threading.Thread(target=_do_check_and_start, daemon=True)
         thread.start()
 
-    def _get_proxy_config(self) -> dict:
-        """Get proxy configuration from UI fields. Returns empty dict if not set."""
-        ip = self.proxy_ip_entry.get().strip()
-        port = self.proxy_port_entry.get().strip()
-        user = self.proxy_user_entry.get().strip()
-        password = self.proxy_pass_entry.get().strip()
+    def _set_manual_mode(self, manual: bool):
+        """Toggle Manual mode: show URL entry instead of drop zone."""
+        self.is_manual_mode = manual
+        if manual:
+            # Show URL entry
+            try:
+                self.drop_frame.grid_remove()
+            except Exception:
+                pass
+            self.share_url_entry.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+            self.img_count_label.grid_remove()
+            try:
+                self.project_mode_frame.grid_remove()
+            except Exception:
+                pass
+            # Visual toggle
+            self.btn_manual.configure(fg_color="#059669")
+            self.btn_auto.configure(fg_color="#6B7280")
+        else:
+            # Show drop frame
+            try:
+                self.share_url_entry.grid_remove()
+            except Exception:
+                pass
+            self.drop_frame.grid(row=0, column=0, sticky="nsew")
+            self.img_count_label.grid(row=1, column=0, sticky="w", padx=5, pady=5)
+            try:
+                self.project_mode_frame.grid(row=1, column=0, sticky="ew", pady=(6, 4))
+            except Exception:
+                pass
+            self.btn_manual.configure(fg_color="#6B7280")
+            self.btn_auto.configure(fg_color="#059669")
 
-        if ip and port:
-            # Save to cache
-            cache.set("proxy_ip", ip)
-            cache.set("proxy_port", port)
-            cache.set("proxy_user", user)
-            cache.set("proxy_pass", password)
-            return {"ip": ip, "port": port, "user": user, "password": password}
+    def _start_manual_process_async(self):
+        """Start manual share processing: validate URL, check key, then start job."""
+        url = self.share_url_entry.get().strip()
+        if not url:
+            return
+
+        # Extract UUID from URL
+        m = re.search(r"/photoshoots/([0-9a-fA-F\-]{8,36})", url)
+        if not m:
+            # Invalid URL
+            return
+        photoshoot_uuid = m.group(1)
+
+        key = cache.get("active_key")
+        if not key:
+            return
+
+        if not self.current_session:
+            return
+
+        address = self.address_entry.get().strip()
+        if not address:
+            return
+
+        # Show loading state
+        self.btn_process.configure(state="disabled", text="⏳ Đang kiểm tra key...")
+        self.update_idletasks()
+
+        def _do_check_and_start():
+            if not self.api.check_key(key, self.app.hwid):
+                self.after(0, lambda: self.btn_process.configure(state="normal", text="BẮT ĐẦU XỬ LÝ"))
+                cache.delete("active_key")
+                self.after(0, lambda: self.app.show_key_screen())
+                return
+
+            # Start manual job on main thread
+            self.after(0, lambda: self._create_and_start_manual_job(address, photoshoot_uuid))
+
+        thread = threading.Thread(target=_do_check_and_start, daemon=True)
+        thread.start()
+
+    def _create_and_start_manual_job(self, address: str, photoshoot_uuid: str):
+        """Create a job for the shared photoshoot and add to UI."""
+        cache.set("address", address)
+        download_dir = getattr(self, 'download_dir', '').strip()
+        if not download_dir:
+            download_dir = os.path.expanduser("~/Downloads")
+
+        proxy_config = {}
+
+        # Start the pipeline share job
+        job = self.pipeline_mgr.run_pipeline_share(
+            session=self.current_session,
+            photoshoot_uuid=photoshoot_uuid,
+            address=address,
+            download_dir=download_dir,
+            on_log=lambda jid, msg: self.after(0, lambda j=jid, m=msg: self._on_job_log(j, m)),
+            on_job_update=lambda j: self.after(0, lambda: self._refresh_job_list()),
+            proxy_config=proxy_config,
+        )
+
+        # Add job to UI and select it
+        self._add_job_to_list(job)
+        self._select_job(job.job_id)
+
+        # Reset button
+        self.btn_process.configure(state="normal", text="BẮT ĐẦU XỬ LÝ")
+
+    def _get_proxy_config(self) -> dict:
+        # Proxy support removed
         return {}
 
     def _test_proxy_async(self):
-        """Test proxy in background thread."""
-        ip = self.proxy_ip_entry.get().strip()
-        port = self.proxy_port_entry.get().strip()
-        user = self.proxy_user_entry.get().strip()
-        password = self.proxy_pass_entry.get().strip()
-
-        if not ip or not port:
-            self.proxy_status_label.configure(text="Không sử dụng", text_color="gray")
-            return
-
-        self.proxy_status_label.configure(text="Đang test...", text_color="#F59E0B")
-
-        def _do_test():
-            success, message = HttpClient.validate_proxy(ip, port, user, password)
-            if success:
-                self.after(0, lambda: self.proxy_status_label.configure(
-                    text=f"{message}", text_color="#22C55E"))
-            else:
-                self.after(0, lambda: self.proxy_status_label.configure(
-                    text=f"{message}", text_color="#EF4444"))
-
-        thread = threading.Thread(target=_do_test, daemon=True)
-        thread.start()
+        # Proxy support removed
+        return
 
     def _create_and_start_job(self, address: str):
         """Create job and add to UI (must run on main thread)."""
         cache.set("address", address)
-        download_dir = self.dir_entry.get().strip()
+        download_dir = getattr(self, 'download_dir', '').strip()
         if not download_dir:
             download_dir = os.path.expanduser("~/Downloads")
 
         # Get proxy config
-        proxy_config = self._get_proxy_config()
+        proxy_config = {}
 
         # Get model IDs from mode selection
         mode = self.mode_var.get()
@@ -873,8 +945,7 @@ class ScreenMain(ctk.CTkFrame):
             open_folder(job.output_path)
         else:
             # Fallback for older jobs without output_path or just in case
-            # This is not perfect but a good safety net
-            download_dir = self.dir_entry.get().strip()
+            download_dir = getattr(self, 'download_dir', '').strip()
             if not download_dir:
                 download_dir = os.path.expanduser("~/Downloads")
             date_str = datetime.datetime.now().strftime("%Y-%m-%d")
