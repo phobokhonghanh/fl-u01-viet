@@ -50,7 +50,6 @@ class App(ctk.CTk):
         except Exception:
             pass
         # Key invalid — show key screen
-        cache.delete("active_key")
         self.show_key_screen()
 
     def show_key_screen(self):

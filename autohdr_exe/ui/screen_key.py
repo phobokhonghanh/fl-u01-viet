@@ -29,7 +29,7 @@ class ScreenKey(ctk.CTkFrame):
         # Title
         ctk.CTkLabel(
             center_frame,
-            text="AutoHDR - v2.1",
+            text="AutoHDR - v3",
             font=("Arial", 28, "bold"),
         ).pack(pady=(0, 30))
 
@@ -89,13 +89,13 @@ class ScreenKey(ctk.CTkFrame):
         # Footer Link: by tuitenPhở
         footer_label = ctk.CTkLabel(
             self,
-            text="Created by 'tuitenPhở'",
+            text="© 2026 Nguyen Dinh Nguyen - Development & Maintenance",
             text_color="#22C55E",  # Green
             font=ctk.CTkFont(family="Arial", size=13, weight="bold", slant="italic"),
             cursor="hand2"
         )
         footer_label.place(relx=0.98, rely=0.97, anchor="se")
-        footer_label.bind("<Button-1>", lambda e: webbrowser.open("https://www.facebook.com/nguyennef.ndn"))
+        footer_label.bind("<Button-1>", lambda e: webbrowser.open("https://www.facebook.com/ndinhnguyende/"))
 
     def check_key(self):
         key = self.key_entry.get().strip()
