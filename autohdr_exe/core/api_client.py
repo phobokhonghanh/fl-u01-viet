@@ -20,7 +20,7 @@ class ApiClient:
 
     def __init__(self, base_url: Optional[str] = None):
         if not base_url:
-            base_url = os.getenv("AUTOHDR_API_BASE", "https://u01-viet-backend.leapcell.app")
+            base_url = os.getenv("AUTOHDR_API_BASE", "https://u01-viet-backend.up.railway.app")
         self.base_url = base_url.rstrip("/")
 
     def _clear_license_cache(self):
