@@ -3,6 +3,6 @@ buildCommand = "pip install -r requirements.txt"
 
 [deploy]
 startCommand = "sh -c 'uvicorn app:app --host 0.0.0.0 --port $PORT'"
-healthcheckPath = "/health"
+healthcheckPath = "/kaithhealthcheck"
 healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
