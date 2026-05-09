@@ -87,7 +87,7 @@ function renderLookupForm() {
 function renderBanner(type) {
     // Render banner thông báo kết quả từ SePay redirect
     const configs = {
-        success: { bg: '#dcfce7', border: '#86efac', color: '#166534', icon: '✅', text: 'Thanh toán thành công! Trang đang cập nhật trạng thái đơn hàng...' },
+        success: { bg: '#dcfce7', border: '#86efac', color: '#166534', icon: '✅', text: 'Thanh toán thành công!' },
         error:   { bg: '#fef2f2', border: '#fca5a5', color: '#991b1b', icon: '❌', text: 'Thanh toán thất bại. Vui lòng thử lại.' },
         cancel:  { bg: '#fef9c3', border: '#fde68a', color: '#854d0e', icon: '⚠️', text: 'Bạn đã hủy thanh toán.' },
     };
@@ -124,7 +124,7 @@ function renderOrder(order) {
     if (!isPaid && !isExpired) {
         actionSection = `
             <button class="btn-refresh" id="btn-pay" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
-                💳 Thanh toán qua SePay
+                💳 Chuyển khoản
             </button>
             <p style="text-align:center;font-size:0.72rem;color:var(--text-light);margin-top:0.5rem;">
                 Bạn sẽ được chuyển sang trang thanh toán an toàn của SePay
@@ -137,7 +137,7 @@ function renderOrder(order) {
             <div class="order-header">
                 <div>
                     <div class="order-user">${escapeHtml(order.user_name)}</div>
-                    <div class="order-id">Đơn #${order.id} · ${date}</div>
+                    <div class="order-id">${date}</div>
                 </div>
                 <span class="status-badge status-${order.status}">${statusLabel(order.status)}</span>
             </div>
@@ -169,7 +169,7 @@ async function initiateCheckout() {
         if (res.status === 400) {
             const err = await res.json();
             showToast(err.detail || 'Đơn hàng không thể thanh toán.', 'error');
-            if (btn) { btn.disabled = false; btn.textContent = '💳 Thanh toán qua SePay'; }
+            if (btn) { btn.disabled = false; btn.textContent = '💳 Chuyển khoản'; }
             // Reload lại để cập nhật trạng thái mới nhất
             setTimeout(loadOrder, 1500);
             return;
@@ -177,7 +177,7 @@ async function initiateCheckout() {
 
         if (res.status === 503) {
             showToast('Cổng thanh toán tạm thời không khả dụng. Vui lòng thử lại sau.', 'error');
-            if (btn) { btn.disabled = false; btn.textContent = '💳 Thanh toán qua SePay'; }
+            if (btn) { btn.disabled = false; btn.textContent = '💳 Chuyển khoản'; }
             return;
         }
 
@@ -217,7 +217,7 @@ async function initiateCheckout() {
     } catch (e) {
         console.error('Checkout error:', e);
         showToast('Không thể kết nối đến server. Vui lòng thử lại.', 'error');
-        if (btn) { btn.disabled = false; btn.textContent = '💳 Thanh toán qua SePay'; }
+        if (btn) { btn.disabled = false; btn.textContent = '💳 Chuyển khoản'; }
     }
 }
 
