@@ -1,9 +1,10 @@
 <!doctype html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Thanh toán</title>
+  <title>NORY STUDIO</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
   <style>
@@ -18,9 +19,15 @@
       --text: #1e293b;
       --text-light: #64748b;
       --border: #e2e8f0;
-      --shadow: 0 4px 24px rgba(0,0,0,0.08);
+      --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       font-family: 'Inter', sans-serif;
       background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
@@ -31,28 +38,34 @@
       padding: 1rem;
       color: var(--text);
     }
+
     .wrapper {
       width: 100%;
       max-width: 480px;
     }
+
     .logo {
       text-align: center;
       margin-bottom: 1.5rem;
     }
+
     .brand-logo {
       display: block;
       width: min(220px, 68vw);
       height: auto;
       margin: 0 auto 0.75rem;
     }
+
     .logo h1 {
       font-size: 1.6rem;
       font-weight: 700;
       color: #1e293b;
     }
+
     .logo h1 span {
       color: var(--primary);
     }
+
     .card {
       background: var(--card-bg);
       border-radius: 16px;
@@ -60,6 +73,7 @@
       box-shadow: var(--shadow);
       border: 1px solid var(--border);
     }
+
     /* Status badge */
     .status-badge {
       display: inline-flex;
@@ -72,10 +86,27 @@
       text-transform: uppercase;
       letter-spacing: 0.06em;
     }
-    .status-PENDING   { background: #fef9c3; color: #854d0e; }
-    .status-PAID      { background: #dcfce7; color: #166534; }
-    .status-PARTIALLY_PAID { background: #ffedd5; color: #9a3412; }
-    .status-EXPIRED   { background: #f1f5f9; color: #64748b; }
+
+    .status-PENDING {
+      background: #fef9c3;
+      color: #854d0e;
+    }
+
+    .status-PAID {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .status-PARTIALLY_PAID {
+      background: #ffedd5;
+      color: #9a3412;
+    }
+
+    .status-EXPIRED {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+
     /* Order info */
     .order-header {
       display: flex;
@@ -83,15 +114,18 @@
       align-items: flex-start;
       margin-bottom: 1.5rem;
     }
+
     .order-id {
       font-size: 0.72rem;
       color: var(--text-light);
       margin-top: 0.2rem;
     }
+
     .order-user {
       font-size: 1.1rem;
       font-weight: 700;
     }
+
     .amount-display {
       font-size: 2rem;
       font-weight: 700;
@@ -99,28 +133,33 @@
       margin-bottom: 1.25rem;
       text-align: center;
     }
+
     /* QR Section */
     .qr-section {
       text-align: center;
       margin: 1.25rem 0;
     }
+
     .qr-section img {
       border-radius: 12px;
       border: 1px solid var(--border);
       max-width: 220px;
       width: 100%;
     }
+
     .qr-hint {
       font-size: 0.78rem;
       color: var(--text-light);
       margin-top: 0.6rem;
     }
+
     /* Divider */
     .divider {
       border: none;
       border-top: 1px solid var(--border);
       margin: 1.25rem 0;
     }
+
     /* Item/Note display */
     .section-label {
       font-size: 0.7rem;
@@ -130,6 +169,7 @@
       color: var(--text-light);
       margin-bottom: 0.4rem;
     }
+
     .item-box {
       background: #f8fafc;
       border: 1px solid var(--border);
@@ -141,6 +181,7 @@
       margin-bottom: 1rem;
       line-height: 1.7;
     }
+
     .item-link {
       display: flex;
       align-items: center;
@@ -156,7 +197,11 @@
       font-weight: 700;
       transition: background 0.2s;
     }
-    .item-link:hover { background: var(--primary-hover); }
+
+    .item-link:hover {
+      background: var(--primary-hover);
+    }
+
     .note-box {
       background: #fffbeb;
       border: 1px solid #fde68a;
@@ -168,6 +213,7 @@
       color: #92400e;
       line-height: 1.6;
     }
+
     /* Waiting state */
     .waiting-box {
       text-align: center;
@@ -176,11 +222,13 @@
       border-radius: 10px;
       border: 1px dashed var(--border);
     }
+
     .waiting-box p {
       font-size: 0.85rem;
       color: var(--text-light);
       margin-top: 0.5rem;
     }
+
     .spinner {
       width: 36px;
       height: 36px;
@@ -190,6 +238,7 @@
       animation: spin 0.8s linear infinite;
       margin: 0 auto 0.75rem;
     }
+
     /* Buttons */
     .btn-refresh {
       width: 100%;
@@ -205,7 +254,10 @@
       font-family: inherit;
       transition: background 0.2s;
     }
-    .btn-refresh:hover { background: var(--primary-hover); }
+
+    .btn-refresh:hover {
+      background: var(--primary-hover);
+    }
 
     /* Error state */
     .error-box {
@@ -213,8 +265,15 @@
       padding: 2rem;
       color: var(--error);
     }
-    .error-box h2 { margin-bottom: 0.5rem; }
-    .error-box p { font-size: 0.85rem; color: var(--text-light); }
+
+    .error-box h2 {
+      margin-bottom: 0.5rem;
+    }
+
+    .error-box p {
+      font-size: 0.85rem;
+      color: var(--text-light);
+    }
 
     /* Lookup form */
     .lookup-form label {
@@ -224,6 +283,7 @@
       margin-bottom: 0.35rem;
       color: var(--text-light);
     }
+
     .lookup-form input {
       width: 100%;
       padding: 0.55rem 0.75rem;
@@ -233,17 +293,20 @@
       font-size: 0.9rem;
       margin-bottom: 0.75rem;
     }
+
     .lookup-form input:focus {
       outline: none;
       border-color: var(--primary);
-      box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
     }
+
     .footer-note {
       text-align: center;
       font-size: 0.72rem;
       color: var(--text-light);
       margin-top: 1.25rem;
     }
+
     .footer-credit {
       display: block;
       margin-top: 0.75rem;
@@ -253,12 +316,35 @@
       text-decoration: none;
       line-height: 1.5;
     }
-    .footer-credit:hover { color: var(--primary); }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-    .fade-in { animation: fadeIn 0.3s ease; }
+
+    .footer-credit:hover {
+      color: var(--primary);
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .fade-in {
+      animation: fadeIn 0.3s ease;
+    }
   </style>
 </head>
+
 <body>
   <div class="wrapper">
     <div class="logo">
@@ -272,8 +358,10 @@
       </div>
     </div>
     <p class="footer-note">Hãy <strong>bookmark</strong> trang này để nhận cập nhật sau thanh toán.</p>
-    <a class="footer-credit" href="https://www.facebook.com/ndinhnguyende/">© 2026 Nguyen Dinh Nguyen - Development & Maintenance Solutions. All rights reserved.</a>
+    <a class="footer-credit" href="https://www.facebook.com/ndinhnguyende/">© 2026 Nguyen Dinh Nguyen - Development &
+      Maintenance Solutions. All rights reserved.</a>
   </div>
   <script type="module" src="/src/payment.js"></script>
 </body>
+
 </html>
