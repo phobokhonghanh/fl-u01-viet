@@ -22,3 +22,5 @@ __pycache__/
 # Job logs and checkpoints
 *.log
 .checkpoint.json
+
+/docs/
