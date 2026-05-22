@@ -1,7 +1,7 @@
 """
 Step 0: Session Management (Local).
 
-Calls autohdr.com/api/auth/session directly with cookie to get user info.
+Calls autohdr.com/api/rpc/auth/appUser directly with cookie to get user info.
 Saves session to local cache for reuse.
 No server-side sessions.json needed.
 """
@@ -61,7 +61,7 @@ def _update_session(records: list, session: SessionRecord) -> list:
 
 def _fetch_session_from_api(client: HttpClient, cookie: str) -> Optional[SessionRecord]:
     """
-    Call autohdr.com/api/auth/session to get user info from cookie.
+    Call autohdr.com/api/rpc/auth/appUser to get user info from cookie.
     """
     step = 0
 
@@ -73,7 +73,7 @@ def _fetch_session_from_api(client: HttpClient, cookie: str) -> Optional[Session
     )
 
     try:
-        response = temp_client.get("/api/auth/session")
+        response = temp_client.get("/api/rpc/auth/appUser")
         response.raise_for_status()
         data = response.json()
     except requests.exceptions.HTTPError as e:
@@ -85,9 +85,14 @@ def _fetch_session_from_api(client: HttpClient, cookie: str) -> Optional[Session
         log(logger, "ERROR", step, f"Lỗi kết nối: {e}")
         return None
 
-    user_data = data.get("user")
+    auth_data = data.get("json", {}) if isinstance(data, dict) else {}
+    user_data = auth_data.get("user") if isinstance(auth_data, dict) else None
+    if auth_data.get("status") != "authenticated":
+        log(logger, "ERROR", step, f"Session không authenticated")
+        return None
+
     if not user_data:
-        log(logger, "ERROR", step, f"Không có user data trong response: {data}")
+        log(logger, "ERROR", step, f"Không có user")
         return None
 
     session = SessionRecord(
@@ -96,7 +101,7 @@ def _fetch_session_from_api(client: HttpClient, cookie: str) -> Optional[Session
         user_id=str(user_data.get("id", "")),
         firstname=user_data.get("first_name", ""),
         lastname=user_data.get("last_name", ""),
-        expires=data.get("expires", ""),
+        expires="",
     )
 
     log(logger, "INFO", step, f"Session OK: email={session.email}, user_id={session.user_id}")
