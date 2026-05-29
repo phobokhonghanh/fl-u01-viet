@@ -1,0 +1,8 @@
+pywebview[qt]
+selenium
+Pillow
+requests
+websocket-client
+cryptography
+urllib3
+certifi

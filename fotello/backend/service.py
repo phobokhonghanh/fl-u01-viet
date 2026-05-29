@@ -1,0 +1,230 @@
+from __future__ import annotations
+
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Any
+
+from .auth import (
+    FOTELLO_STATE,
+    fotello_get_status,
+    fotello_get_tokens,
+    fotello_is_connected,
+    fotello_reconnect_saved,
+)
+from .browser_auth import fotello_grab_tokens_from_browser
+from .client import LogFn, noop_log, set_request_logger
+from .constants import (
+    EP_CREATE_ENHANCE,
+    EP_CREATE_LISTING,
+    FLD_BV,
+    FLD_ENHANCES,
+    FLD_IS_WM,
+    IMAGE_EXTENSIONS,
+    POLL_INITIAL_ATTEMPTS,
+    POLL_INITIAL_INTERVAL,
+    POLL_LATER_INTERVAL,
+    POLL_READY_DIVISOR,
+    POLL_TIMEOUT,
+)
+from .downloads import (
+    download_single_enhance,
+    fotello_batch_download,
+    fotello_download_listing,
+    fotello_list_enhances_for_listing,
+    fotello_list_listings,
+)
+from .firestore import firestore_patch
+from .fotello_api import api_post, upload_image_resumable
+
+
+def _setting_number(settings: dict[str, Any] | None, key: str, default: int | float) -> int | float:
+    if not settings:
+        return default
+    try:
+        value = settings.get(key, default)
+        if isinstance(default, int):
+            return int(value)
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _next_poll_interval(settings: dict[str, Any] | None, attempt: int, ready_count: int) -> float:
+    initial_attempts = max(0, int(_setting_number(settings, "poll_initial_attempts", POLL_INITIAL_ATTEMPTS)))
+    initial_interval = max(1.0, float(_setting_number(settings, "poll_initial_interval", POLL_INITIAL_INTERVAL)))
+    later_interval = max(1.0, float(_setting_number(settings, "poll_later_interval", POLL_LATER_INTERVAL)))
+    divisor = max(1.0, float(_setting_number(settings, "poll_ready_divisor", POLL_READY_DIVISOR)))
+    base = initial_interval if attempt <= initial_attempts else later_interval
+    if ready_count >= 1 and divisor > 1:
+        return max(1.0, base / divisor)
+    return base
+
+
+def _poll_sleep(seconds: float, is_cancelled) -> None:
+    deadline = time.time() + max(0.0, seconds)
+    while time.time() < deadline and not is_cancelled():
+        time.sleep(min(1.0, deadline - time.time()))
+
+
+def fotello_upload_and_enhance(
+    input_dir: str,
+    output_dir: str,
+    log: LogFn = None,
+    progress_fn=None,
+    is_cancelled=None,
+    preferences: dict[str, Any] | None = None,
+    settings: dict[str, Any] | None = None,
+) -> list[str]:
+    log = log or noop_log
+    progress_fn = progress_fn or (lambda cur, total: None)
+    is_cancelled = is_cancelled or (lambda: False)
+    if not FOTELLO_STATE.get("connected"):
+        raise RuntimeError("Chưa kết nối Fotello")
+
+    tokens = fotello_get_tokens()
+    id_token = tokens["id_token"]
+    access_token = tokens["access_token"]
+    team_id = FOTELLO_STATE.get("team_id")
+    if not team_id:
+        raise RuntimeError("Lỗi không tìm thấy team_id. Hãy kết nối lại.")
+
+    input_path = Path(input_dir)
+    if not input_path.exists() or not input_path.is_dir():
+        raise RuntimeError(f"Thư mục đầu vào không hợp lệ: {input_dir}")
+    images = sorted(p for p in input_path.iterdir() if p.suffix.lower() in IMAGE_EXTENSIONS)
+    if not images:
+        raise RuntimeError(f"Không tìm thấy ảnh hợp lệ (JPG, RAW...) trong {input_dir}")
+
+    preferences = preferences or {
+        "bracket_size": 1,
+        "contrast_style": "signature",
+        "exterior_sky_replacement": "on",
+        "perspective_correction": "off",
+        "custom_style_id": None,
+        "cloud_style": "full_house_puffs",
+    }
+    total_images = len(images)
+    log(f"📂 Đã tìm thấy {total_images} ảnh trong thư mục. Bắt đầu upload...", "info")
+
+    listing_name = "AutoHDR Upload - " + time.strftime("%d %m, %Y %H:%M")
+    bracket_size = int(preferences.get("bracket_size") or 1)
+    brackets = [images[i : i + bracket_size] for i in range(0, len(images), bracket_size)]
+    total_work = total_images + len(brackets)
+    uploaded: dict[Path, str] = {}
+
+    def _do_upload(img_path: Path) -> tuple[Path, str]:
+        if is_cancelled():
+            return img_path, ""
+        log(f"  ↑ Đang tải lên {img_path.name}...", "info")
+        upload_id = upload_image_resumable(img_path, id_token, str(team_id))
+        return img_path, upload_id
+
+    done = 0
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(_do_upload, p) for p in images]
+        for future in as_completed(futures):
+            img_path, upload_id = future.result()
+            if upload_id:
+                uploaded[img_path] = upload_id
+            done += 1
+            progress_fn(done, total_work)
+    log(f"✔ Đã upload xong {len(uploaded)} ảnh. Đang tạo dự án...", "success")
+    if is_cancelled():
+        return []
+
+    listing_result = api_post(
+        EP_CREATE_LISTING,
+        {
+            "name": listing_name,
+            "num_total_brackets": len(brackets),
+            "filenames": [p.name for p in images],
+            "isDemoListing": False,
+            "teamId": team_id,
+        },
+        id_token,
+    )
+    listing_id = listing_result["id"]
+    log(f"✔ Đã tạo Listing {listing_id[:8]} với {len(brackets)} HDR brackets", "success")
+
+    enhance_ids: list[str] = []
+    for bracket in brackets:
+        if is_cancelled():
+            return []
+        upload_ids = [uploaded[p] for p in bracket if p in uploaded]
+        if not upload_ids:
+            continue
+        enhance_result = api_post(
+            EP_CREATE_ENHANCE,
+            {
+                "upload_ids": upload_ids,
+                "listing_id": listing_id,
+                "preferences": preferences,
+                "teamId": team_id,
+            },
+            id_token,
+        )
+        enhance_id = enhance_result.get("id")
+        if enhance_id:
+            enhance_ids.append(enhance_id)
+            firestore_patch(
+                f"{FLD_ENHANCES}/{enhance_id}",
+                {FLD_IS_WM: {FLD_BV: False}},
+                access_token,
+                [FLD_IS_WM],
+                log=log,
+            )
+            names = ", ".join(p.name for p in bracket)
+            log(f"  ✔ Đã kích hoạt xử lý & xóa logo cho [{names}]", "success")
+        done += 1
+        progress_fn(done, total_work)
+
+    out_dir = Path(output_dir) / f"listing_{listing_id[:8]}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    downloaded: list[str] = []
+    poll_timeout = max(30.0, float(_setting_number(settings, "poll_timeout", POLL_TIMEOUT)))
+    deadline = time.time() + poll_timeout
+    pending = set(enhance_ids)
+    poll_attempt = 0
+
+    while pending and time.time() < deadline and not is_cancelled():
+        poll_attempt += 1
+        ready_count = 0
+        for enhance_id in list(pending):
+            try:
+                path = download_single_enhance(
+                    enhance_id,
+                    access_token,
+                    out_dir,
+                    log=log,
+                    is_cancelled=is_cancelled,
+                )
+            except Exception:
+                path = None
+            if path:
+                downloaded.append(str(path))
+                pending.discard(enhance_id)
+                ready_count += 1
+        if pending:
+            interval = _next_poll_interval(settings, poll_attempt, ready_count)
+            log(
+                f"Polling enhance attempt={poll_attempt} ready={ready_count}/{len(enhance_ids)} "
+                f"pending={len(pending)} next={int(interval)}s",
+                "info",
+            )
+            _poll_sleep(interval, is_cancelled)
+    return downloaded
+
+
+__all__ = [
+    "set_request_logger",
+    "fotello_grab_tokens_from_browser",
+    "fotello_reconnect_saved",
+    "fotello_get_status",
+    "fotello_list_listings",
+    "fotello_batch_download",
+    "fotello_download_listing",
+    "fotello_upload_and_enhance",
+    "fotello_is_connected",
+    "fotello_list_enhances_for_listing",
+]

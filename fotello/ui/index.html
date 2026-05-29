@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fotello Client</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="app">
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-mark">F</div>
+                <div>
+                    <h1>Fotello</h1>
+                    <span>Desktop workflow</span>
+                </div>
+            </div>
+            <button class="nav active" data-panel="download-panel">Listings</button>
+            <button class="nav" data-panel="upload-panel">Upload & Enhance</button>
+            <button class="nav" data-panel="settings-panel">Settings</button>
+            <div class="status-box">
+                <div id="status-dot" class="status-dot idle"></div>
+                <div>
+                    <strong id="status-text">Sẵn sàng</strong>
+                    <span id="fotello-status">Chưa kết nối</span>
+                </div>
+            </div>
+        </aside>
+
+        <section class="content">
+            <header class="topbar">
+                <div>
+                    <h2>Fotello Client</h2>
+                    <p id="chrome-path-display">Chrome: đang kiểm tra...</p>
+                </div>
+                <div class="actions">
+                    <button id="btn-open-chrome" onclick="fotelloOpenChrome()">Mở Chrome</button>
+                    <button id="btn-connect" class="primary" onclick="fotelloConnect()">Kết nối Fotello</button>
+                    <button onclick="fotelloStop()" class="danger">Dừng</button>
+                </div>
+            </header>
+
+            <section id="download-panel" class="panel active">
+                <div class="section-head">
+                    <h3>Tải listings cũ</h3>
+                    <button onclick="fotelloLoadListings()">Tải danh sách</button>
+                </div>
+                <label class="select-all">
+                    <input type="checkbox" id="fotello-select-all" onchange="fotelloToggleAll()">
+                    Chọn tất cả
+                </label>
+                <div id="fotello-listings" class="listing-box">
+                    Bấm “Kết nối Fotello”, sau đó “Tải danh sách”.
+                </div>
+                <div class="field-row">
+                    <label>Thư mục lưu ảnh</label>
+                    <input type="text" id="fotello-savedir" placeholder="Đường dẫn folder output">
+                    <button onclick="fotelloBrowseFolder()">Chọn</button>
+                </div>
+                <button class="primary wide" onclick="fotelloStartDownload()">Tải ảnh đã chọn</button>
+            </section>
+
+            <section id="upload-panel" class="panel">
+                <div class="section-head">
+                    <h3>Upload & Enhance</h3>
+                </div>
+                <div class="field-row">
+                    <label>Thư mục ảnh gốc</label>
+                    <input type="text" id="fotello-inputdir" placeholder="JPG/RAW folder">
+                    <button onclick="fotelloBrowseInputFolder()">Chọn</button>
+                </div>
+                <div class="field-row">
+                    <label>Thư mục lưu kết quả</label>
+                    <input type="text" id="fotello-upload-savedir" placeholder="Output folder">
+                    <button onclick="fotelloBrowseUploadOutput()">Chọn</button>
+                </div>
+                <div class="grid">
+                    <label>Bracket size
+                        <select id="fotello-pref-bracket">
+                            <option value="1">1</option>
+                            <option value="3" selected>3</option>
+                            <option value="5">5</option>
+                            <option value="7">7</option>
+                        </select>
+                    </label>
+                    <label>Contrast
+                        <select id="fotello-pref-contrast">
+                            <option value="signature" selected>signature</option>
+                            <option value="natural">natural</option>
+                            <option value="dramatic">dramatic</option>
+                            <option value="twilight">twilight</option>
+                        </select>
+                    </label>
+                    <label>Sky replacement
+                        <select id="fotello-pref-sky">
+                            <option value="on" selected>on</option>
+                            <option value="off">off</option>
+                        </select>
+                    </label>
+                    <label>Perspective
+                        <select id="fotello-pref-perspective">
+                            <option value="on">on</option>
+                            <option value="off" selected>off</option>
+                        </select>
+                    </label>
+                    <label>Cloud style
+                        <select id="fotello-pref-cloud">
+                            <option value="full_house_puffs" selected>full_house_puffs</option>
+                        </select>
+                    </label>
+                </div>
+                <button class="primary wide" onclick="fotelloStartUpload()">Upload & tải kết quả</button>
+            </section>
+
+            <section id="settings-panel" class="panel">
+                <div class="section-head">
+                    <h3>Settings</h3>
+                    <div class="inline-actions">
+                        <button onclick="repairBrowserRuntime()">Repair runtime</button>
+                        <button onclick="saveSettings()">Lưu</button>
+                    </div>
+                </div>
+                <div class="grid">
+                    <label>Debug port
+                        <input type="number" id="set-port" value="9222">
+                    </label>
+                    <label>Fotello URL
+                        <input type="text" id="set-fotello-url" value="https://app.fotello.co">
+                    </label>
+                    <label>Timeout
+                        <input type="number" id="set-timeout" value="30">
+                    </label>
+                    <label>Delay
+                        <input type="number" step="0.1" id="set-delay" value="0.3">
+                    </label>
+                    <label>Browser strategy
+                        <select id="set-browser-strategy">
+                            <option value="system_then_download">system_then_download</option>
+                            <option value="download_only">download_only</option>
+                        </select>
+                    </label>
+                    <label>Browser channel
+                        <select id="set-browser-channel">
+                            <option value="Stable">Stable</option>
+                            <option value="Beta">Beta</option>
+                            <option value="Dev">Dev</option>
+                            <option value="Canary">Canary</option>
+                        </select>
+                    </label>
+                    <label>Browser cache dir
+                        <input type="text" id="set-browser-cache-dir" placeholder="%LOCALAPPDATA%\\FotelloClient\\runtime">
+                    </label>
+                    <label>Browser override
+                        <input type="text" id="set-browser-override" placeholder="Optional full path tới chrome.exe">
+                    </label>
+                    <label>Browser path
+                        <input type="text" id="browser-path-readonly" readonly>
+                    </label>
+                    <label>Browser source
+                        <input type="text" id="browser-source-readonly" readonly>
+                    </label>
+                    <label>Browser channel hiện tại
+                        <input type="text" id="browser-channel-readonly" readonly>
+                    </label>
+                    <label>Poll 10 lần đầu
+                        <input type="number" id="set-poll-initial-interval" value="60">
+                    </label>
+                    <label>Số lần poll đầu
+                        <input type="number" id="set-poll-initial-attempts" value="10">
+                    </label>
+                    <label>Poll các lần sau
+                        <input type="number" id="set-poll-later-interval" value="30">
+                    </label>
+                    <label>Chia khi có ảnh ready
+                        <input type="number" step="0.5" id="set-poll-ready-divisor" value="2">
+                    </label>
+                    <label>Timeout polling
+                        <input type="number" id="set-poll-timeout" value="1800">
+                    </label>
+                </div>
+            </section>
+
+            <section class="progress hidden" id="progress-section">
+                <div class="progress-info">
+                    <span id="progress-text">0 / 0</span>
+                    <span id="progress-pct">0%</span>
+                </div>
+                <div class="progress-track">
+                    <div id="progress-fill"></div>
+                </div>
+            </section>
+
+            <section class="logs">
+                <div class="log-head">
+                    <strong>Fotello log</strong>
+                    <button onclick="clearLog()">Xóa log</button>
+                </div>
+                <textarea id="log-box" readonly spellcheck="false" aria-label="Fotello log"></textarea>
+            </section>
+        </section>
+    </main>
+    <script src="app.js"></script>
+</body>
+</html>

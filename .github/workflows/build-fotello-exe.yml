@@ -1,0 +1,48 @@
+name: Fotello EXE CI
+
+on:
+  push:
+    branches: ["deploy/exe"]
+    paths:
+      - 'fotello/**'
+      - '.github/workflows/build-fotello-exe.yml'
+  workflow_dispatch:
+
+jobs:
+  build_fotello:
+    runs-on: windows-latest
+    steps:
+      - name: Tải Code vào môi trường Build
+        uses: actions/checkout@v4
+
+      - name: Cài đặt Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cài đặt Thư viện và PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r fotello/requirements.txt
+
+      - name: Đóng gói Fotello thành file chạy (.exe)
+        working-directory: ./fotello
+        run: |
+          pyinstaller `
+            --onefile `
+            --noconsole `
+            --name Fotello_Client `
+            --add-data "ui;ui" `
+            --add-data "settings.json;." `
+            --hidden-import webview.platforms.winforms `
+            --hidden-import selenium.webdriver.chrome.service `
+            --hidden-import selenium.webdriver.chrome.options `
+            main.py
+
+      - name: Lưu trữ file Fotello EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fotello_Client
+          path: fotello/dist/Fotello_Client.exe
+          retention-days: 7
