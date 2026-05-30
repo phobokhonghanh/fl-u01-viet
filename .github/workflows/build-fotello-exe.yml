@@ -57,8 +57,10 @@ jobs:
           Copy-Item fotello\main.py build\fotello_stage\main.py -Force
           Copy-Item fotello\browser_runtime.py build\fotello_stage\browser_runtime.py -Force
           Copy-Item build\fotello_backend_obf\backend build\fotello_stage\backend -Recurse -Force
+          Copy-Item build\fotello_backend_obf\pyarmor_runtime_* build\fotello_stage -Recurse -Force
           Copy-Item fotello\ui build\fotello_stage\ui -Recurse -Force
           Copy-Item fotello\settings.json build\fotello_stage\settings.json -Force
+          Get-ChildItem build\fotello_stage -Directory | Where-Object { $_.Name -like "pyarmor_runtime_*" } | ForEach-Object { Write-Host "Copied $($_.Name)" }
 
       - name: Kiểm tra import staging
         working-directory: ./build/fotello_stage
@@ -81,6 +83,7 @@ jobs:
             --collect-data certifi `
             --hidden-import browser_runtime `
             --hidden-import backend `
+            --hidden-import pyarmor_runtime_000000 `
             --hidden-import webview `
             --hidden-import webview.platforms.winforms `
             --exclude-module PyQt5 `
