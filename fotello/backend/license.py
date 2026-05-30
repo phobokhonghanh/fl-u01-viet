@@ -18,6 +18,7 @@ from .client import print_system_exception
 
 CACHE_DURATION = 12 * 60 * 60
 DEFAULT_API_BASE = "https://u01-viet-backend.up.railway.app"
+LICENSE_PRODUCT = "fotello"
 
 
 def get_app_data_dir() -> Path:
@@ -104,6 +105,7 @@ class LicenseClient:
             if (
                 cache.get("active_key") == key
                 and cache.get("license_machine_id") == machine_id
+                and cache.get("license_product", LICENSE_PRODUCT) == LICENSE_PRODUCT
                 and (now - last_check) < CACHE_DURATION
             ):
                 return LicenseResult(
@@ -118,7 +120,7 @@ class LicenseClient:
         try:
             res = requests.post(
                 f"{self.base_url}/api/key/active",
-                json={"key": key, "machine_id": machine_id},
+                json={"key": key, "machine_id": machine_id, "product": LICENSE_PRODUCT},
                 timeout=15,
             )
             if res.status_code == 403:
@@ -139,6 +141,7 @@ class LicenseClient:
                     "active_key": key,
                     "license_last_check": now,
                     "license_machine_id": machine_id,
+                    "license_product": LICENSE_PRODUCT,
                     "license_message": message or "Kích hoạt thành công",
                     "license_data": data,
                 }
