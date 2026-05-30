@@ -435,15 +435,41 @@ def _download_runtime(
 
 def clear_downloaded_runtime(settings: dict[str, Any], log_fn: LOG_FN = None) -> bool:
     metadata = _load_metadata(settings)
-    runtime_root = get_runtime_root(settings)
+    runtime_root = get_runtime_root(settings).resolve()
     removed = False
-    runtime_dir = Path(str(metadata.get("runtime_dir") or ""))
-    if runtime_dir.exists():
-        shutil.rmtree(runtime_dir, ignore_errors=True)
-        removed = True
+
+    def _is_safe_runtime_path(path: Path) -> bool:
+        try:
+            resolved = path.expanduser().resolve()
+            return (
+                bool(str(path).strip())
+                and resolved != Path.cwd().resolve()
+                and resolved != Path.home().resolve()
+                and resolved != runtime_root
+                and resolved.is_relative_to(runtime_root)
+            )
+        except Exception:
+            return False
+
+    def _remove_runtime_dir(path: Path, label: str) -> bool:
+        if not _is_safe_runtime_path(path):
+            _log(log_fn, f"Bo qua xoa runtime path khong an toan ({label}): {path}", "warn")
+            return False
+        if not path.exists():
+            return False
+        shutil.rmtree(path, ignore_errors=True)
+        _log(log_fn, f"Da xoa runtime cache ({label}): {path}", "warn")
+        return True
+
+    raw_runtime_dir = str(metadata.get("runtime_dir") or "").strip()
+    if raw_runtime_dir:
+        runtime_dir = Path(os.path.expandvars(os.path.expanduser(raw_runtime_dir)))
+        removed = _remove_runtime_dir(runtime_dir, "metadata") or removed
+
     cft_dir = runtime_root / "chrome-for-testing"
-    if cft_dir.exists():
+    if cft_dir.exists() and cft_dir.is_dir():
         shutil.rmtree(cft_dir, ignore_errors=True)
+        _log(log_fn, f"Da xoa Chrome for Testing cache: {cft_dir}", "warn")
         removed = True
     metadata_path = get_browser_metadata_path(settings)
     metadata_path.unlink(missing_ok=True)

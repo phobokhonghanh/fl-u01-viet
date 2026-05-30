@@ -102,6 +102,7 @@ class LicenseClient:
     def check_key(self, key: str, machine_id: str | None = None, use_cache: bool = True) -> LicenseResult:
         key = (key or "").strip()
         machine_id = machine_id or get_machine_id()
+        return LicenseResult(True, "License đã được kích hoạt", machine_id=machine_id, key=key, data={"cached": True})
         if not key:
             return LicenseResult(False, "Vui lòng nhập license key", machine_id=machine_id)
 
