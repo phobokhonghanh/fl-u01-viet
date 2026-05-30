@@ -33,6 +33,14 @@
             </div>
 
             <div class="form-group">
+              <label for="key-product">Ứng dụng</label>
+              <select id="key-product" required>
+                <option value="autohdr">AutoHDR</option>
+                <option value="fotello">Fotello</option>
+              </select>
+            </div>
+
+            <div class="form-group">
               <label>Thời hạn sử dụng</label>
               <div style="display: flex; gap: 1.5rem; margin-top: 0.5rem; align-items: center;">
                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
@@ -85,6 +93,7 @@
                 <tr style="text-align: left; border-bottom: 2px solid var(--border);">
                   <th style="padding: 0.5rem;">Tên</th>
                   <th style="padding: 0.5rem;">Key</th>
+                  <th style="padding: 0.5rem;">Ứng dụng</th>
                   <th style="padding: 0.5rem;">Hạn dùng</th>
                   <th style="padding: 0.5rem;">Máy khóa</th>
                   <th style="padding: 0.5rem; text-align: center;">Hành động</th>
@@ -93,7 +102,7 @@
               <tbody id="keys-body">
                 <!-- Dữ liệu sẽ được chèn vào đây -->
                 <tr>
-                  <td colspan="5" data-empty="true" style="text-align: center; padding: 2rem; color: var(--text-light);">
+                  <td colspan="6" data-empty="true" style="text-align: center; padding: 2rem; color: var(--text-light);">
                     Nhập mật khẩu bên trái và bấm "Làm mới" để xem danh sách.
                   </td>
                 </tr>
