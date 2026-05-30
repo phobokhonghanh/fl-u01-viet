@@ -48,6 +48,10 @@ jobs:
             --hidden-import webview.platforms.winforms `
             --hidden-import selenium.webdriver.chrome.service `
             --hidden-import selenium.webdriver.chrome.options `
+            --exclude-module PyQt5 `
+            --exclude-module PyQt6 `
+            --exclude-module PySide2 `
+            --exclude-module PySide6 `
             main.py
 
       - name: Lưu trữ file Fotello EXE
