@@ -1,0 +1,15 @@
+{
+  "port": 9222,
+  "fotello_url": "https://app.fotello.co",
+  "timeout": 30,
+  "delay": 0.3,
+  "browser_strategy": "system_then_download",
+  "browser_channel": "Stable",
+  "browser_cache_dir": "",
+  "browser_path_override": "",
+  "poll_initial_interval": 60,
+  "poll_later_interval": 30,
+  "poll_initial_attempts": 10,
+  "poll_ready_divisor": 2,
+  "poll_timeout": 1800
+}
