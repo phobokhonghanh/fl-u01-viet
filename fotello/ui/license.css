@@ -1,8 +1,16 @@
 :root {
-  color-scheme: light;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #172026;
-  background: #eef3f6;
+  --bg: #0b0c10;
+  --panel: #151821;
+  --panel2: #1d2230;
+  --border: #2b3242;
+  --text: #eef2ff;
+  --muted: #8b95aa;
+  --accent: #00d3a7;
+  --red: #ff5570;
+  color-scheme: dark;
+  font-family: "Segoe UI", Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
 }
 
 * {
@@ -12,17 +20,16 @@
 body {
   margin: 0;
   min-height: 100vh;
+  background: var(--bg);
 }
 
 .license-shell {
   min-height: 100vh;
   display: grid;
+  grid-template-rows: 1fr auto;
   place-items: center;
   padding: 24px;
-  background:
-    linear-gradient(135deg, rgba(28, 92, 108, 0.12), transparent 38%),
-    linear-gradient(315deg, rgba(196, 91, 65, 0.12), transparent 42%),
-    #eef3f6;
+  background: var(--bg);
 }
 
 .license-panel {
@@ -30,15 +37,15 @@ body {
   display: grid;
   gap: 22px;
   padding: 28px;
-  border: 1px solid #d5dee3;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 18px 50px rgba(30, 42, 48, 0.12);
+  background: var(--panel);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
 }
 
 .eyebrow {
   margin: 0 0 8px;
-  color: #43606c;
+  color: var(--accent);
   font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
@@ -52,7 +59,7 @@ h1 {
 
 .subtext {
   margin: 10px 0 0;
-  color: #5d6f78;
+  color: var(--muted);
 }
 
 .license-form {
@@ -69,17 +76,19 @@ input {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
-  border: 1px solid #c7d2d8;
+  border: 1px solid var(--border);
   border-radius: 6px;
+  background: #0d1017;
+  color: var(--text);
   font-size: 15px;
 }
 
 button {
   min-height: 44px;
-  border: 0;
+  border: 1px solid var(--accent);
   border-radius: 6px;
-  background: #1d6f7c;
-  color: #ffffff;
+  background: var(--accent);
+  color: #02110e;
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
@@ -93,14 +102,31 @@ button:disabled {
 .status {
   min-height: 22px;
   margin: 0;
-  color: #60717a;
+  color: var(--muted);
   font-size: 14px;
 }
 
 .status.error {
-  color: #b42318;
+  color: var(--red);
 }
 
 .status.success {
-  color: #137333;
+  color: var(--accent);
+}
+
+.license-footer {
+  align-self: end;
+  padding-top: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.license-footer a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.license-footer a:hover {
+  color: var(--accent);
 }
