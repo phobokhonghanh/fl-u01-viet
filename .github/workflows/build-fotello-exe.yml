@@ -27,13 +27,14 @@ jobs:
           pip install -r fotello/requirements.txt
 
       - name: Obfuscate Python code bằng PyArmor
+        working-directory: ./fotello
         run: |
           pyarmor gen `
-            -O build/fotello_protected `
+            -O ..\build\fotello_protected `
             -r `
-            fotello/main.py `
-            fotello/browser_runtime.py `
-            fotello/backend
+            main.py `
+            browser_runtime.py `
+            backend
 
       - name: Đóng gói Fotello đã bảo vệ thành file chạy (.exe)
         working-directory: ./build/fotello_protected
@@ -45,6 +46,17 @@ jobs:
             --add-data "..\..\fotello\ui;ui" `
             --add-data "..\..\fotello\settings.json;." `
             --paths "." `
+            --hidden-import browser_runtime `
+            --hidden-import backend `
+            --hidden-import backend.auth `
+            --hidden-import backend.browser_auth `
+            --hidden-import backend.client `
+            --hidden-import backend.constants `
+            --hidden-import backend.downloads `
+            --hidden-import backend.firestore `
+            --hidden-import backend.fotello_api `
+            --hidden-import backend.license `
+            --hidden-import backend.service `
             --hidden-import webview.platforms.winforms `
             --hidden-import selenium.webdriver.chrome.service `
             --hidden-import selenium.webdriver.chrome.options `
