@@ -5,7 +5,7 @@ Key Manager - Utilities for tracking and validating executable keys.
 import json
 import logging
 from typing import List, Optional
-from models.schemas import KeyRecord
+from models.schemas import DEFAULT_KEY_PRODUCT, KeyRecord, is_valid_key_product, normalize_key_product
 from config.settings import Settings
 from core.s3_storage import S3Storage
 
@@ -52,15 +52,29 @@ def random_key_string(length: int = 10) -> str:
     characters = string.ascii_letters + string.digits
     return ''.join(random.choice(characters) for _ in range(length))
 
-def check_key(s3_key: str, key_str: str, machine_id: Optional[str] = None) -> bool:
+def check_key(
+    s3_key: str,
+    key_str: str,
+    machine_id: Optional[str] = None,
+    product: Optional[str] = None,
+) -> bool:
     """
-    Check if the given key is valid, not expired, and matches machine_id.
+    Check if the given key is valid, not expired, matches product, and matches machine_id.
     """
+    requested_product = normalize_key_product(product)
+    if not is_valid_key_product(requested_product):
+        logger.warning(f"Product không hợp lệ khi active key: {requested_product}")
+        return False
+
     records = load_keys(s3_key)
     for record in records:
         if record.key == key_str:
             if record.is_expired():
                 logger.warning(f"Key đã hết hạn hoặc không hoạt động: {key_str}")
+                return False
+
+            if normalize_key_product(record.product) != requested_product:
+                logger.warning(f"Key {key_str} không hợp lệ cho product: {requested_product}")
                 return False
             
             if record.machine_id:
@@ -77,14 +91,22 @@ def check_key(s3_key: str, key_str: str, machine_id: Optional[str] = None) -> bo
     logger.warning(f"Không tìm thấy key: {key_str}")
     return False
 
-def add_or_update_key_by_name(s3_key: str, name: str, expires_at: Optional[str] = None):
+def add_or_update_key_by_name(
+    s3_key: str,
+    name: str,
+    expires_at: Optional[str] = None,
+    product: Optional[str] = None,
+):
     """
     Add or update a key by name.
     """
+    normalized_product = normalize_key_product(product)
     records = load_keys(s3_key)
     for record in records:
         if record.name == name:
+            record.product = normalized_product
             if not record.is_expired():
+                save_keys(s3_key, records)
                 return record, "valid"
             else:
                 record.expires_at = expires_at
@@ -93,7 +115,7 @@ def add_or_update_key_by_name(s3_key: str, name: str, expires_at: Optional[str] 
                 return record, "updated"
             
     new_key = random_key_string(10)
-    new_record = KeyRecord(key=new_key, name=name, is_active=True, expires_at=expires_at)
+    new_record = KeyRecord(key=new_key, name=name, is_active=True, expires_at=expires_at, product=normalized_product)
     records.append(new_record)
     save_keys(s3_key, records)
     return new_record, "new"
@@ -113,15 +135,26 @@ def import_keys(s3_key: str, new_keys_data: list) -> int:
     """Import valid keys from JSON array."""
     records = load_keys(s3_key)
     existing_names = {r.name for r in records if r.name}
+    existing_keys = {r.key for r in records if r.key}
     
     imported_count = 0
     for item in new_keys_data:
         try:
             if not isinstance(item, dict):
+                logger.warning(f"Nhập key thất bại vì mục không phải object: {item}")
                 continue
+            if not str(item.get("key") or "").strip():
+                logger.warning(f"Nhập key thất bại vì thiếu key: {item}")
+                continue
+            product = normalize_key_product(item.get("product", DEFAULT_KEY_PRODUCT))
+            if not is_valid_key_product(product):
+                logger.warning(f"Nhập key thất bại vì product không hợp lệ: {product}")
+                continue
+            item = {**item, "product": product}
             new_record = KeyRecord.from_dict(item)
-            if new_record.name and new_record.name not in existing_names:
+            if new_record.key not in existing_keys and (not new_record.name or new_record.name not in existing_names):
                 records.append(new_record)
+                existing_keys.add(new_record.key)
                 existing_names.add(new_record.name)
                 imported_count += 1
         except Exception as e:

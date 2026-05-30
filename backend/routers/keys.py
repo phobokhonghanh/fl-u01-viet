@@ -11,8 +11,8 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Response
 from pydantic import BaseModel
 
 from config.settings import Settings
-from core.key_manager import s3_storage
 from core import key_manager
+from models.schemas import DEFAULT_KEY_PRODUCT, is_valid_key_product, normalize_key_product
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api", tags=["keys"])
 class KeyRequest(BaseModel):
     key: str
     machine_id: Optional[str] = None
+    product: Optional[str] = None
 
 
 class AdminKeyListRequest(BaseModel):
@@ -33,6 +34,7 @@ class AdminKeyAddRequest(BaseModel):
     password: str
     days: Optional[int] = 30
     forever: Optional[bool] = False
+    product: Optional[str] = DEFAULT_KEY_PRODUCT
 
 
 class AdminKeyDeleteRequest(BaseModel):
@@ -53,9 +55,12 @@ def _check_admin(password: str, settings: Settings):
 async def verify_key(req: KeyRequest):
     """Verify if a key is active and matches machine_id (locking)."""
     settings = Settings.from_env()
-    is_valid = key_manager.check_key(settings.keys_filename, req.key, req.machine_id)
+    product = normalize_key_product(req.product)
+    if not is_valid_key_product(product):
+        raise HTTPException(status_code=400, detail="Invalid product")
+    is_valid = key_manager.check_key(settings.keys_filename, req.key, req.machine_id, product)
     if not is_valid:
-        raise HTTPException(status_code=403, detail="Key is invalid, expired, or used on another machine")
+        raise HTTPException(status_code=403, detail="Key is invalid, expired, used on another machine, or not allowed for this product")
     return {"status": "ok", "valid": True}
 
 
@@ -79,7 +84,11 @@ async def admin_add_key(req: AdminKeyAddRequest):
         expiry_dt = datetime.utcnow() + timedelta(days=req.days)
         expiry = expiry_dt.isoformat() + "Z"
 
-    record, status = key_manager.add_or_update_key_by_name(settings.keys_filename, req.name, expiry)
+    product = normalize_key_product(req.product)
+    if not is_valid_key_product(product):
+        raise HTTPException(status_code=400, detail="Invalid product")
+
+    record, status = key_manager.add_or_update_key_by_name(settings.keys_filename, req.name, expiry, product)
     return {"status": status, "record": record.to_dict()}
 
 
@@ -122,9 +131,10 @@ async def admin_export_keys(req: AdminKeyExportRequest):
     settings = Settings.from_env()
     _check_admin(req.password, settings)
 
-    content = s3_storage.get_object(settings.keys_filename)
-    if not content:
+    keys = key_manager.load_keys(settings.keys_filename)
+    if not keys:
         raise HTTPException(status_code=404, detail="Keys data not found on S3")
+    content = json.dumps([key.to_dict() for key in keys], ensure_ascii=False, indent=2)
 
     return Response(
         content=content,
