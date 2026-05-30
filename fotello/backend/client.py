@@ -28,6 +28,13 @@ def request_logger() -> LogFn:
     return _request_logger
 
 
+def print_system_exception(context: str, exc: BaseException | None = None) -> None:
+    if exc is None:
+        print(f"[Fotello][EXCEPTION] {context}")
+        return
+    print(f"[Fotello][EXCEPTION] {context}: {type(exc).__name__}: {exc}")
+
+
 def _request_context(req: urllib.request.Request) -> str:
     return f"{req.get_method()} {req.full_url}"
 
@@ -35,7 +42,8 @@ def _request_context(req: urllib.request.Request) -> str:
 def _read_error_body(exc: urllib.error.HTTPError, limit: int = 1200) -> str:
     try:
         body = exc.read(limit)
-    except Exception:
+    except Exception as read_exc:
+        print_system_exception("client._read_error_body", read_exc)
         return ""
     if not body:
         return ""
@@ -56,9 +64,11 @@ def open_checked(req: urllib.request.Request, timeout: int):
     try:
         resp = urllib.request.urlopen(req, timeout=timeout)
     except urllib.error.HTTPError as exc:
+        print_system_exception(f"client.open_checked HTTPError: {context}", exc)
         _log_bad_response(context, exc.code, _read_error_body(exc))
         raise
     except Exception as exc:
+        print_system_exception(f"client.open_checked error: {context}", exc)
         _log_bad_response(context, "error", str(exc))
         raise
 
@@ -67,7 +77,8 @@ def open_checked(req: urllib.request.Request, timeout: int):
         _log_bad_response(context, status)
         try:
             resp.close()
-        except Exception:
+        except Exception as close_exc:
+            print_system_exception(f"client.open_checked close failed: {context}", close_exc)
             pass
         raise RuntimeError(f"HTTP status {status} for {context}")
     return resp
@@ -79,11 +90,13 @@ def retry(fn: Callable[[], Any], max_retries: int = MAX_RETRIES) -> Any:
         try:
             return fn()
         except urllib.error.HTTPError as exc:
+            print_system_exception(f"client.retry HTTPError attempt={attempt + 1}", exc)
             last_error = exc
             if exc.code not in (429, 500, 502, 503, 504) or attempt == max_retries - 1:
                 raise
             time.sleep(min(2**attempt, 30))
         except Exception as exc:
+            print_system_exception(f"client.retry error attempt={attempt + 1}", exc)
             last_error = exc
             if attempt == max_retries - 1:
                 raise

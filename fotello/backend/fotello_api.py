@@ -6,7 +6,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from .client import json_request, open_checked, request_logger, retry
+from .client import json_request, open_checked, print_system_exception, request_logger, retry
 from .constants import CONTENT_TYPES, EP_CREATE_UPLOAD, FOTELLO_API
 
 
@@ -29,7 +29,8 @@ def api_post(endpoint: str, body: dict[str, Any], id_token: str) -> dict[str, An
 
     try:
         return retry(_do)
-    except Exception:
+    except Exception as exc:
+        print_system_exception(f"fotello_api.api_post endpoint={endpoint}", exc)
         logger = request_logger()
         if logger:
             safe_body = json.dumps(body, ensure_ascii=False)[:1200]

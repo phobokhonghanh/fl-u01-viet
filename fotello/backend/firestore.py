@@ -6,7 +6,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from .client import LogFn, json_request, open_checked, retry
+from .client import LogFn, json_request, open_checked, print_system_exception, retry
 from .constants import FIRESTORE_URL
 
 
@@ -47,6 +47,7 @@ def firestore_patch(
     try:
         return retry(_do)
     except urllib.error.HTTPError as exc:
+        print_system_exception(f"firestore.firestore_patch doc_path={doc_path}", exc)
         if log:
             log(f"PATCH Error {exc.code}: {exc.read().decode(errors='replace')}", "error")
         raise
@@ -76,6 +77,7 @@ def firestore_run_query(
     try:
         return retry(_do)
     except Exception as exc:
+        print_system_exception("firestore.firestore_run_query", exc)
         if log:
             log(f"Query Error {exc}", "error")
         raise

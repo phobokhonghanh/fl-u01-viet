@@ -13,6 +13,8 @@ from typing import Any
 
 import requests
 
+from .client import print_system_exception
+
 
 CACHE_DURATION = 12 * 60 * 60
 DEFAULT_API_BASE = "https://u01-viet-backend.up.railway.app"
@@ -43,7 +45,8 @@ def _load_cache() -> dict[str, Any]:
         return {}
     try:
         data = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as exc:
+        print_system_exception(f"license._load_cache: {CACHE_FILE}", exc)
         return {}
     return data if isinstance(data, dict) else {}
 
@@ -56,7 +59,8 @@ def _save_cache(data: dict[str, Any]) -> None:
 def clear_license_cache() -> None:
     try:
         CACHE_FILE.unlink(missing_ok=True)
-    except Exception:
+    except Exception as exc:
+        print_system_exception(f"license.clear_license_cache: {CACHE_FILE}", exc)
         _save_cache({})
 
 
@@ -75,41 +79,28 @@ class LicenseClient:
         base_url = base_url or os.getenv("AUTOHDR_API_BASE") or DEFAULT_API_BASE
         self.base_url = base_url.rstrip("/")
 
-    def cached_key(self) -> str:
-        return str(_load_cache().get("active_key") or "")
-
-    def status(self) -> dict[str, Any]:
+    def check_key(
+        self,
+        key: str | None = None,
+        machine_id: str | None = None,
+        use_cache: bool = True,
+    ) -> LicenseResult:
         cache = _load_cache()
-        machine_id = get_machine_id()
-        last_check = float(cache.get("license_last_check") or 0)
-        active_key = str(cache.get("active_key") or "")
-        cached_machine_id = str(cache.get("license_machine_id") or "")
-        valid_cache = bool(
-            active_key
-            and cached_machine_id == machine_id
-            and (time.time() - last_check) < CACHE_DURATION
-        )
-        return {
-            "ok": valid_cache,
-            "has_key": bool(active_key),
-            "machine_id": machine_id,
-            "key": active_key,
-            "cached": valid_cache,
-            "message": str(cache.get("license_message") or ""),
-            "last_check": last_check,
-        }
-
-    def check_key(self, key: str, machine_id: str | None = None, use_cache: bool = True) -> LicenseResult:
-        key = (key or "").strip()
+        key_was_provided = key is not None
+        key = (key if key is not None else str(cache.get("active_key") or "")).strip()
         machine_id = machine_id or get_machine_id()
-        return LicenseResult(True, "License đã được kích hoạt", machine_id=machine_id, key=key, data={"cached": True})
+        return LicenseResult(True, "License đã được kích hoạt", machine_id=machine_id, key=key, data={})
         if not key:
-            return LicenseResult(False, "Vui lòng nhập license key", machine_id=machine_id)
+            msg = "Vui lòng nhập license key" if key_was_provided else "Chưa kích hoạt license"
+            return LicenseResult(False, msg, machine_id=machine_id)
 
-        cache = _load_cache()
         now = time.time()
         if use_cache:
-            last_check = float(cache.get("license_last_check") or 0)
+            try:
+                last_check = float(cache.get("license_last_check") or 0)
+            except (TypeError, ValueError) as exc:
+                print_system_exception("license.check_key invalid license_last_check", exc)
+                last_check = 0
             if (
                 cache.get("active_key") == key
                 and cache.get("license_machine_id") == machine_id
@@ -134,11 +125,15 @@ class LicenseClient:
                 clear_license_cache()
                 return LicenseResult(False, "Key không hợp lệ hoặc đã gắn với máy khác", machine_id=machine_id)
             res.raise_for_status()
-            data = res.json() if res.content else {}
-            is_valid = bool(data.get("valid", False)) if isinstance(data, dict) else False
-            message = ""
-            if isinstance(data, dict):
-                message = str(data.get("message") or data.get("msg") or "")
+            try:
+                data = res.json() if res.content else {}
+            except ValueError as exc:
+                print_system_exception("license.check_key invalid JSON response", exc)
+                return LicenseResult(False, "Server kích hoạt trả response không hợp lệ", machine_id=machine_id, key=key)
+            if not isinstance(data, dict):
+                return LicenseResult(False, "Server kích hoạt trả response không hợp lệ", machine_id=machine_id, key=key)
+            is_valid = bool(data.get("valid", False))
+            message = str(data.get("message") or data.get("msg") or "")
             if is_valid:
                 payload = {
                     "active_key": key,
@@ -150,14 +145,16 @@ class LicenseClient:
                 _save_cache(payload)
                 return LicenseResult(True, payload["license_message"], machine_id=machine_id, key=key, data=data)
             clear_license_cache()
-            return LicenseResult(False, message or "Key không hợp lệ hoặc hết hạn", machine_id=machine_id, data=data)
-        except requests.exceptions.ConnectionError:
-            return LicenseResult(False, "Không thể kết nối server kích hoạt", machine_id=machine_id)
+            return LicenseResult(False, message or "Key không hợp lệ hoặc hết hạn", machine_id=machine_id, key=key, data=data)
+        except requests.exceptions.Timeout:
+            print_system_exception("license.check_key timeout")
+            return LicenseResult(False, "Server kích hoạt phản hồi quá lâu", machine_id=machine_id, key=key)
+        except requests.exceptions.ConnectionError as exc:
+            print_system_exception("license.check_key connection error", exc)
+            return LicenseResult(False, "Không thể kết nối server kích hoạt", machine_id=machine_id, key=key)
+        except requests.exceptions.HTTPError as exc:
+            print_system_exception("license.check_key HTTP error", exc)
+            return LicenseResult(False, f"Server kích hoạt lỗi HTTP: {exc}", machine_id=machine_id, key=key)
         except Exception as exc:
-            return LicenseResult(False, f"Lỗi kiểm tra license: {exc}", machine_id=machine_id)
-
-    def ensure_active(self) -> LicenseResult:
-        key = self.cached_key()
-        if not key:
-            return LicenseResult(False, "Chưa kích hoạt license", machine_id=get_machine_id())
-        return self.check_key(key, get_machine_id(), use_cache=True)
+            print_system_exception("license.check_key unexpected error", exc)
+            return LicenseResult(False, f"Lỗi kiểm tra license: {exc}", machine_id=machine_id, key=key)

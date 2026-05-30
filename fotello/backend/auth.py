@@ -7,7 +7,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from .client import LogFn, json_request, noop_log
+from .client import LogFn, json_request, noop_log, print_system_exception
 from .constants import FIREBASE_AUTH_URL, FLD_SV
 
 
@@ -47,7 +47,8 @@ def load_fotello_tokens() -> dict[str, Any]:
         return {}
     try:
         data = json.loads(FOTELLO_TOKEN_FILE.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as exc:
+        print_system_exception(f"auth.load_fotello_tokens: {FOTELLO_TOKEN_FILE}", exc)
         return {}
     if isinstance(data, dict):
         FOTELLO_STATE.update({k: data.get(k, v) for k, v in FOTELLO_STATE.items()})
@@ -74,7 +75,8 @@ def decode_jwt_payload(id_token: str) -> dict[str, Any]:
         payload_b64 = id_token.split(".")[1]
         payload_b64 += "=" * (-len(payload_b64) % 4)
         return json.loads(base64.urlsafe_b64decode(payload_b64.encode()))
-    except Exception:
+    except Exception as exc:
+        print_system_exception("auth.decode_jwt_payload", exc)
         return {}
 
 
@@ -96,7 +98,8 @@ def detect_team_id(id_token: str, access_token: str) -> str:
         for template in TEAM_ID_USER_DOC_PATHS:
             try:
                 doc = firestore_get(template.format(uid=uid), access_token)
-            except Exception:
+            except Exception as exc:
+                print_system_exception(f"auth.detect_team_id firestore_get template={template}", exc)
                 continue
             fields = doc.get("fields", {})
             for key in TEAM_ID_CLAIM_KEYS:
@@ -119,7 +122,8 @@ def fotello_get_tokens() -> dict[str, str]:
     if not FOTELLO_STATE.get("team_id"):
         try:
             FOTELLO_STATE["team_id"] = detect_team_id(tokens["id_token"], tokens["access_token"])
-        except Exception:
+        except Exception as exc:
+            print_system_exception("auth.fotello_get_tokens detect_team_id", exc)
             pass
     save_fotello_tokens()
     return tokens
@@ -137,6 +141,7 @@ def fotello_reconnect_saved(log: LogFn = None) -> bool:
         log("✔ Fotello reconnect OK", "success")
         return True
     except Exception as exc:
+        print_system_exception("auth.fotello_reconnect_saved", exc)
         FOTELLO_STATE["connected"] = False
         log(f"Fotello reconnect lỗi: {exc}", "error")
         return False

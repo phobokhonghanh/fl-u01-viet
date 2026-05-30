@@ -21,7 +21,8 @@ except Exception:
     webview = None
 
 import browser_runtime
-from backend.license import LicenseClient
+from backend.client import print_system_exception
+from backend.license import LicenseClient, get_machine_id
 from backend import service as fotello
 
 
@@ -152,11 +153,11 @@ def open_ui_page(filename: str) -> bool:
 
 
 def ensure_license_active() -> tuple[bool, str]:
-    result = license_client.ensure_active()
+    result = license_client.check_key(use_cache=True)
     if result.ok:
         return True, result.msg
     js_log(result.msg or "License chưa active", "error")
-    open_ui_page("license.html")
+    threading.Timer(0.8, lambda: open_ui_page("license.html")).start()
     return False, result.msg
 
 
@@ -286,13 +287,22 @@ def get_driver() -> Any:
 
 class Api:
     def license_status(self) -> dict[str, Any]:
-        return license_client.status()
+        result = license_client.check_key(use_cache=True)
+        return {
+            "ok": result.ok,
+            "has_key": bool(result.key),
+            "machine_id": result.machine_id,
+            "key": result.key,
+            "cached": result.cached,
+            "message": result.msg,
+            "last_check": (result.data or {}).get("license_last_check", 0) if isinstance(result.data, dict) else 0,
+        }
 
     def license_get_machine_id(self) -> str:
-        return license_client.status().get("machine_id", "")
+        return get_machine_id()
 
     def license_activate(self, key: str) -> dict[str, Any]:
-        result = license_client.check_key(key)
+        result = license_client.check_key(key, use_cache=False)
         if result.ok:
             threading.Timer(0.8, lambda: open_ui_page("index.html")).start()
         return {
@@ -321,6 +331,7 @@ class Api:
             browser_runtime.clear_downloaded_runtime(settings, js_log)
             return {"ok": True, "browser": resolve_browser_state(force_download=True)}
         except browser_runtime.BrowserRuntimeError as exc:
+            print_system_exception("main.Api.repair_browser_runtime", exc)
             js_log(f"{exc.code}: {exc.message}", "error")
             return {"ok": False, "msg": f"{exc.code}: {exc.message}"}
 
@@ -340,7 +351,8 @@ class Api:
             if isinstance(result, (list, tuple)) and result:
                 return result[0]
             return result or ""
-        except Exception:
+        except Exception as exc:
+            print_system_exception("main.Api.browse_folder", exc)
             return ""
 
     def fotello_open_chrome(self) -> bool:
@@ -357,6 +369,7 @@ class Api:
             js_status("idle", "Đã kết nối Fotello" if ok else "Chưa kết nối")
             return {"ok": bool(ok), "status": status}
         except Exception as exc:
+            print_system_exception("main.Api.fotello_connect", exc)
             js_log(f"Kết nối Fotello lỗi: {exc}", "error")
             js_status("idle", "Lỗi kết nối")
             return {"ok": False, "msg": str(exc)}
@@ -372,6 +385,7 @@ class Api:
         try:
             return {"ok": True, "listings": fotello.fotello_list_listings(js_log)}
         except Exception as exc:
+            print_system_exception("main.Api.fotello_list_listings", exc)
             js_log(f"Fotello lỗi: {exc}", "error")
             return {"ok": False, "msg": str(exc), "listings": []}
 
@@ -383,8 +397,6 @@ class Api:
         if fotello_running:
             return {"ok": False, "msg": "Fotello task đang chạy"}
         fotello_running = True
-        js_status("running", "Đang tải Fotello...")
-        js_progress_reset()
 
         def _run() -> None:
             global fotello_running
@@ -395,13 +407,20 @@ class Api:
                 js_log(f"Fotello tải xong {count} ảnh", "success")
                 js_status("idle", "Hoàn tất")
             except Exception as exc:
+                print_system_exception("main.Api.fotello_download job", exc)
                 js_log(f"Fotello lỗi: {exc}", "error")
                 js_status("idle", "Lỗi")
             finally:
                 fotello_running = False
 
-        fotello_task_thread = threading.Thread(target=_run, daemon=True)
-        fotello_task_thread.start()
+        def _start_job() -> None:
+            global fotello_task_thread
+            js_status("running", "Đang tải Fotello...")
+            js_progress_reset()
+            fotello_task_thread = threading.Thread(target=_run, daemon=True)
+            fotello_task_thread.start()
+
+        threading.Timer(0.25, _start_job).start()
         return {"ok": True}
 
     def fotello_upload(
@@ -417,8 +436,6 @@ class Api:
         if fotello_running:
             return {"ok": False, "msg": "Fotello task đang chạy"}
         fotello_running = True
-        js_status("running", "Đang upload/enhance Fotello...")
-        js_progress_reset()
 
         def _run() -> None:
             global fotello_running
@@ -435,13 +452,20 @@ class Api:
                 js_log(f"Fotello upload/download xong {len(results)} ảnh", "success")
                 js_status("idle", "Hoàn tất")
             except Exception as exc:
+                print_system_exception("main.Api.fotello_upload job", exc)
                 js_log(f"Fotello lỗi: {exc}", "error")
                 js_status("idle", "Lỗi")
             finally:
                 fotello_running = False
 
-        fotello_task_thread = threading.Thread(target=_run, daemon=True)
-        fotello_task_thread.start()
+        def _start_job() -> None:
+            global fotello_task_thread
+            js_status("running", "Đang upload/enhance Fotello...")
+            js_progress_reset()
+            fotello_task_thread = threading.Thread(target=_run, daemon=True)
+            fotello_task_thread.start()
+
+        threading.Timer(0.25, _start_job).start()
         return {"ok": True}
 
     def fotello_stop(self) -> dict[str, Any]:
@@ -459,7 +483,7 @@ def main() -> None:
     inspect_browser_state()
     if webview is None:
         raise RuntimeError("pywebview chưa được cài. Chạy: pip install -r requirements.txt")
-    start_page = "index.html" if license_client.ensure_active().ok else "license.html"
+    start_page = "index.html" if license_client.check_key(use_cache=True).ok else "license.html"
     index = os.path.join(UI_DIR, start_page)
     window = webview.create_window("Fotello Client", index, width=1180, height=760, js_api=Api())
     gui = "qt" if sys.platform.startswith("linux") else None

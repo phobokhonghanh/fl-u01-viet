@@ -4,7 +4,7 @@ import time
 from typing import Any
 
 from .auth import FOTELLO_STATE, detect_team_id, fotello_get_tokens, save_fotello_tokens
-from .client import LogFn, noop_log
+from .client import LogFn, noop_log, print_system_exception
 
 
 def fotello_grab_tokens_from_browser(driver: Any, log: LogFn = None) -> bool:
@@ -65,6 +65,7 @@ def fotello_grab_tokens_from_browser(driver: Any, log: LogFn = None) -> bool:
         driver.set_script_timeout(15)
         token_data = driver.execute_async_script(script)
     except Exception as exc:
+        print_system_exception("browser_auth.fotello_grab_tokens_from_browser extract token", exc)
         log(f"Token extract error: {exc}", "error")
         return False
 
@@ -79,6 +80,7 @@ def fotello_grab_tokens_from_browser(driver: Any, log: LogFn = None) -> bool:
         tokens = fotello_get_tokens()
         FOTELLO_STATE["team_id"] = detect_team_id(tokens["id_token"], tokens["access_token"])
     except Exception as exc:
+        print_system_exception("browser_auth.fotello_grab_tokens_from_browser detect_team_id", exc)
         log(f"Team detect warn: {exc}", "warn")
     save_fotello_tokens()
     log("✔ Đã kết nối Fotello", "success")

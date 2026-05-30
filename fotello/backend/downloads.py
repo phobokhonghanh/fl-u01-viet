@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 from .auth import FOTELLO_STATE, fotello_get_tokens, fotello_reconnect_saved
-from .client import LogFn, json_request, noop_log, open_checked, retry
+from .client import LogFn, json_request, noop_log, open_checked, print_system_exception, retry
 from .constants import (
     FLD_BV,
     FLD_EDITED,
@@ -225,6 +225,7 @@ def fotello_download_listing(
             if results:
                 return results
     except Exception as exc:
+        print_system_exception(f"downloads.fotello_download_listing ZIP listing_id={listing_id}", exc)
         log(f"ZIP download lỗi, fallback từng ảnh: {exc}", "warn")
 
     log("[DL-08] Fallback tải từng enhance", "warn")

@@ -1,5 +1,4 @@
 let fotelloListingsData = [];
-
 function qs(id) {
     return document.getElementById(id);
 }
@@ -9,6 +8,12 @@ function setStatus(state, text) {
     if (dot) dot.className = 'status-dot ' + state;
     const status = qs('status-text');
     if (status) status.textContent = text;
+}
+
+function clearButtonFocus() {
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+    }
 }
 
 function addLog(msg, type = '') {
@@ -173,7 +178,8 @@ function selectedListings() {
     return Array.from(document.querySelectorAll('.fotello-listing-cb:checked')).map(cb => cb.dataset.id);
 }
 
-function fotelloStartDownload() {
+async function fotelloStartDownload() {
+    clearButtonFocus();
     const api = requireApi();
     if (!api) return;
     const selected = selectedListings();
@@ -187,10 +193,14 @@ function fotelloStartDownload() {
         return;
     }
     addLog(`Bắt đầu tải ${selected.length} listings...`, 'info');
-    api.fotello_download(selected, savedir);
+    const result = await api.fotello_download(selected, savedir);
+    if (!result.ok) {
+        addLog(result.msg || 'Không bắt đầu được job download', 'error');
+    }
 }
 
-function fotelloStartUpload() {
+async function fotelloStartUpload() {
+    clearButtonFocus();
     const api = requireApi();
     if (!api) return;
     const inputdir = qs('fotello-inputdir').value.trim();
@@ -211,11 +221,15 @@ function fotelloStartUpload() {
         cloud_style: qs('fotello-pref-cloud').value,
         custom_style_id: null
     };
-    addLog(`Bắt đầu upload/enhance từ ${inputdir}...`, 'info');
-    api.fotello_upload(inputdir, savedir, preferences);
+    addLog(`Bắt đầu jobs với thư mục ${inputdir}...`, 'info');
+    const result = await api.fotello_upload(inputdir, savedir, preferences);
+    if (!result.ok) {
+        addLog(result.msg || 'Không bắt đầu được job upload', 'error');
+    }
 }
 
 function fotelloStop() {
+    clearButtonFocus();
     const api = requireApi();
     if (api) api.fotello_stop();
 }
