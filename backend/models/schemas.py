@@ -2,6 +2,18 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
+DEFAULT_KEY_PRODUCT = "autohdr"
+VALID_KEY_PRODUCTS = {"autohdr", "fotello"}
+
+
+def normalize_key_product(product: Optional[str] = None) -> str:
+    value = str(product or DEFAULT_KEY_PRODUCT).strip().lower()
+    return value or DEFAULT_KEY_PRODUCT
+
+
+def is_valid_key_product(product: Optional[str] = None) -> bool:
+    return normalize_key_product(product) in VALID_KEY_PRODUCTS
+
 @dataclass
 class KeyRecord:
     key: str
@@ -9,6 +21,7 @@ class KeyRecord:
     is_active: bool = True
     expires_at: Optional[str] = None # ISO format datetime
     machine_id: Optional[str] = None # Unique ID of the locked machine
+    product: str = DEFAULT_KEY_PRODUCT
 
     def is_expired(self) -> bool:
         if not self.is_active:
@@ -30,7 +43,8 @@ class KeyRecord:
             "name": self.name,
             "is_active": self.is_active,
             "expires_at": self.expires_at,
-            "machine_id": self.machine_id
+            "machine_id": self.machine_id,
+            "product": normalize_key_product(self.product)
         }
     
     @classmethod
@@ -40,5 +54,6 @@ class KeyRecord:
             name=data.get("name", ""),
             is_active=data.get("is_active", True),
             expires_at=data.get("expires_at", None),
-            machine_id=data.get("machine_id", None)
+            machine_id=data.get("machine_id", None),
+            product=normalize_key_product(data.get("product"))
         )
