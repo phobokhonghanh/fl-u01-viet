@@ -26,49 +26,85 @@ jobs:
           pip install pyinstaller pyarmor
           pip install -r fotello/requirements.txt
 
-      - name: Obfuscate Python code bằng PyArmor
+      - name: Kiểm tra cú pháp Fotello
+        run: |
+          python -m py_compile `
+            fotello/main.py `
+            fotello/browser_runtime.py `
+            fotello/backend/__init__.py `
+            fotello/backend/auth.py `
+            fotello/backend/browser_auth.py `
+            fotello/backend/client.py `
+            fotello/backend/constants.py `
+            fotello/backend/downloads.py `
+            fotello/backend/firestore.py `
+            fotello/backend/fotello_api.py `
+            fotello/backend/license.py `
+            fotello/backend/service.py
+
+      - name: Obfuscate backend bằng PyArmor
         working-directory: ./fotello
         run: |
           pyarmor gen `
-            -O ..\build\fotello_protected `
+            -O ..\build\fotello_backend_obf `
             -r `
-            main.py `
-            browser_runtime.py `
             backend
 
-      - name: Đóng gói Fotello đã bảo vệ thành file chạy (.exe)
-        working-directory: ./build/fotello_protected
+      - name: Tạo thư mục staging
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build\fotello_stage | Out-Null
+          Copy-Item fotello\main.py build\fotello_stage\main.py -Force
+          Copy-Item fotello\browser_runtime.py build\fotello_stage\browser_runtime.py -Force
+          Copy-Item build\fotello_backend_obf\backend build\fotello_stage\backend -Recurse -Force
+          Copy-Item fotello\ui build\fotello_stage\ui -Recurse -Force
+          Copy-Item fotello\settings.json build\fotello_stage\settings.json -Force
+
+      - name: Kiểm tra import staging
+        working-directory: ./build/fotello_stage
+        run: |
+          python -c "import browser_runtime; from backend.license import LicenseClient; from backend import service; print('Fotello staging import smoke OK')"
+          python main.py --smoke-test
+
+      - name: Đóng gói Fotello thành file chạy (.exe)
+        working-directory: ./build/fotello_stage
         run: |
           pyinstaller `
             --onefile `
             --noconsole `
             --name Fotello_Client `
-            --add-data "..\..\fotello\ui;ui" `
-            --add-data "..\..\fotello\settings.json;." `
+            --add-data "ui;ui" `
+            --add-data "settings.json;." `
             --paths "." `
+            --collect-submodules requests `
+            --collect-submodules selenium `
+            --collect-data certifi `
             --hidden-import browser_runtime `
             --hidden-import backend `
-            --hidden-import backend.auth `
-            --hidden-import backend.browser_auth `
-            --hidden-import backend.client `
-            --hidden-import backend.constants `
-            --hidden-import backend.downloads `
-            --hidden-import backend.firestore `
-            --hidden-import backend.fotello_api `
-            --hidden-import backend.license `
-            --hidden-import backend.service `
+            --hidden-import webview `
             --hidden-import webview.platforms.winforms `
-            --hidden-import selenium.webdriver.chrome.service `
-            --hidden-import selenium.webdriver.chrome.options `
             --exclude-module PyQt5 `
             --exclude-module PyQt6 `
             --exclude-module PySide2 `
             --exclude-module PySide6 `
             main.py
 
+      - name: Kiểm tra EXE smoke test
+        working-directory: ./build/fotello_stage
+        run: |
+          .\dist\Fotello_Client.exe --smoke-test
+
+      - name: Kiểm tra artifact
+        shell: pwsh
+        run: |
+          $exe = "build\fotello_stage\dist\Fotello_Client.exe"
+          if (!(Test-Path $exe)) { throw "Không tìm thấy Fotello_Client.exe" }
+          $sizeMb = [math]::Round((Get-Item $exe).Length / 1MB, 2)
+          Write-Host "Fotello_Client.exe size: $sizeMb MB"
+
       - name: Lưu trữ file Fotello EXE
         uses: actions/upload-artifact@v4
         with:
           name: Fotello_Client
-          path: build/fotello_protected/dist/Fotello_Client.exe
+          path: build/fotello_stage/dist/Fotello_Client.exe
           retention-days: 7
