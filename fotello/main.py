@@ -479,6 +479,10 @@ class Api:
 
 def main() -> None:
     global window
+    if "--smoke-test" in sys.argv:
+        load_settings()
+        print("Fotello smoke test OK")
+        return
     load_settings()
     inspect_browser_state()
     if webview is None:
