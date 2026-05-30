@@ -7,7 +7,7 @@
   "browser_channel": "Stable",
   "browser_cache_dir": "",
   "browser_path_override": "",
-  "poll_initial_interval": 20,
+  "poll_initial_interval": 60,
   "poll_later_interval": 30,
   "poll_initial_attempts": 10,
   "poll_ready_divisor": 2,

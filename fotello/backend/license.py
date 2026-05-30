@@ -89,7 +89,7 @@ class LicenseClient:
         key_was_provided = key is not None
         key = (key if key is not None else str(cache.get("active_key") or "")).strip()
         machine_id = machine_id or get_machine_id()
-        return LicenseResult(True, "License đã được kích hoạt", machine_id=machine_id, key=key, data={})
+        # return LicenseResult(True, "License đã được kích hoạt", machine_id=machine_id, key=key, data={})
         if not key:
             msg = "Vui lòng nhập license key" if key_was_provided else "Chưa kích hoạt license"
             return LicenseResult(False, msg, machine_id=machine_id)

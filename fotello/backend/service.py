@@ -195,6 +195,7 @@ def fotello_upload_and_enhance(
     poll_timeout = max(30.0, float(_setting_number(settings, "poll_timeout", POLL_TIMEOUT)))
     deadline = time.time() + poll_timeout
     pending = set(enhance_ids)
+    failed_items: set[str] = set()
     poll_attempt = 0
 
     # log(f"Kiểm tra trạng thái...", "info")
@@ -213,26 +214,28 @@ def fotello_upload_and_enhance(
                 )
             except Exception as exc:
                 print_system_exception(f"service.fotello_upload_and_enhance download enhance={enhance_id}", exc)
+                failed_items.add(enhance_id)
                 path = None
             if path:
                 downloaded.append(str(path))
                 pending.discard(enhance_id)
+                failed_items.discard(enhance_id)
                 ready_count += 1
+        # log(f"Step 08: Lỗi khi kiểm tra/tải ảnh - {failed_count} mục lỗi.", "error")
         if pending:
             interval = _next_poll_interval(settings, poll_attempt, ready_count)
-            # log(
-            #     f"  Attempt={poll_attempt} ready={ready_count}/{len(enhance_ids)} "
-            #     f"pending={len(pending)} next={int(interval)}s",
-            #     "info",
-            # )
             log(
                 f"Step 08: Kiểm tra lần {poll_attempt} - ready={ready_count}/{len(enhance_ids)}, "
                 f"pending={len(pending)}, chờ {int(interval)}s.",
                 "info",
             )
             _poll_sleep(interval, is_cancelled)
+        elif ready_count:
+            log(f"Step 08: Tải ảnh hoàn tất - ready={len(downloaded)}/{len(enhance_ids)}.", "success")
+    error_count = len(set(pending) | failed_items)
+    if error_count:
+        log(f"Step 08: Lỗi {error_count}/{len(enhance_ids)} mục chưa tải được.", "error")
     # log(f"Hoàn tất job upload/download {len(downloaded)} ảnh.", "success")
-    log(f"Step 9: Hoàn tất upload/download - tải được {len(downloaded)} ảnh.", "success")
     return downloaded
 
 
