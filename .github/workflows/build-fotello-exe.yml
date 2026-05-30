@@ -83,6 +83,15 @@ jobs:
             --collect-data certifi `
             --hidden-import browser_runtime `
             --hidden-import backend `
+            --hidden-import backend.auth `
+            --hidden-import backend.browser_auth `
+            --hidden-import backend.client `
+            --hidden-import backend.constants `
+            --hidden-import backend.downloads `
+            --hidden-import backend.firestore `
+            --hidden-import backend.fotello_api `
+            --hidden-import backend.license `
+            --hidden-import backend.service `
             --hidden-import pyarmor_runtime_000000 `
             --hidden-import webview `
             --hidden-import webview.platforms.winforms `
