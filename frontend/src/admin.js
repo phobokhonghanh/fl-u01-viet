@@ -6,6 +6,7 @@ const API_BASE = import.meta.env?.VITE_API_BASE || "https://autohdr-backend.up.r
 const keyForm = document.getElementById('key-form');
 const adminPassInput = document.getElementById('admin-pass');
 const keyNameInput = document.getElementById('key-name');
+const keyProductSelect = document.getElementById('key-product');
 const btnCreate = document.getElementById('btn-create');
 const btnList = document.getElementById('btn-list');
 const btnCopy = document.getElementById('btn-copy');
@@ -15,6 +16,10 @@ const keysBody = document.getElementById('keys-body');
 const btnExport = document.getElementById('btn-export');
 const inputImport = document.getElementById('import-file');
 
+let allKeys = [];
+let currentKeysPage = 1;
+const KEYS_PER_PAGE = 10;
+
 /**
  * Hiển thị thông báo Toast đơn giản
  */
@@ -23,15 +28,88 @@ function showToast(message, isError = false) {
     alert(message);
 }
 
+function escapeHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function normalizeProduct(product) {
+    return String(product || 'autohdr').trim().toLowerCase() || 'autohdr';
+}
+
+function productBadge(product) {
+    const value = normalizeProduct(product);
+    const labels = { autohdr: 'AutoHDR', fotello: 'Fotello' };
+    const colors = {
+        autohdr: { bg: '#dbeafe', color: '#1e40af' },
+        fotello: { bg: '#dcfce7', color: '#166534' },
+    };
+    const c = colors[value] || { bg: '#f1f5f9', color: '#64748b' };
+    return `<span class="badge" style="background:${c.bg}; color:${c.color};">${labels[value] || escapeHtml(value)}</span>`;
+}
+
+function renderKeysLoading() {
+    const oldPagination = document.getElementById('keys-pagination');
+    if (oldPagination) oldPagination.remove();
+    keysBody.innerHTML = `
+        <tr>
+            <td colspan="6" data-empty="true">
+                <div class="admin-loading">
+                    <div class="admin-loading-spinner"></div>
+                    <span>Đang tải danh sách key...</span>
+                </div>
+            </td>
+        </tr>`;
+}
+
+function renderKeyPagination(totalKeys) {
+    const totalPages = Math.max(1, Math.ceil(totalKeys / KEYS_PER_PAGE));
+    if (totalPages <= 1) return '';
+
+    return `
+        <div class="pagination">
+            <button class="pagination-btn" data-key-page-nav="prev" ${currentKeysPage === 1 ? 'disabled' : ''}>Trước</button>
+            <span>Trang ${currentKeysPage}/${totalPages}</span>
+            <button class="pagination-btn" data-key-page-nav="next" ${currentKeysPage === totalPages ? 'disabled' : ''}>Sau</button>
+        </div>`;
+}
+
+function attachKeyPaginationActions() {
+    document.querySelectorAll('[data-key-page-nav]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const totalPages = Math.max(1, Math.ceil(allKeys.length / KEYS_PER_PAGE));
+            if (btn.dataset.keyPageNav === 'prev') {
+                currentKeysPage = Math.max(1, currentKeysPage - 1);
+            } else {
+                currentKeysPage = Math.min(totalPages, currentKeysPage + 1);
+            }
+            renderKeys();
+        });
+    });
+}
+
+function sortKeys(keys) {
+    return [...keys].sort((a, b) => {
+        const productCompare = normalizeProduct(a.product).localeCompare(normalizeProduct(b.product));
+        if (productCompare !== 0) return productCompare;
+        return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+}
+
 /**
  * Liệt kê danh sách keys
  */
-async function loadKeys() {
+async function loadKeys({ resetPage = true } = {}) {
     const password = adminPassInput.value;
     if (!password) {
         showToast("Vui lòng nhập mật khẩu!");
         return;
     }
+
+    renderKeysLoading();
 
     try {
         const response = await fetch(`${API_BASE}/api/admin/keys/list`, {
@@ -46,20 +124,35 @@ async function loadKeys() {
         }
 
         const keys = await response.json();
-        renderKeys(keys);
+        allKeys = sortKeys(keys);
+        if (resetPage) currentKeysPage = 1;
+        renderKeys();
     } catch (error) {
         showToast(error.message, true);
+        const oldPagination = document.getElementById('keys-pagination');
+        if (oldPagination) oldPagination.remove();
+        keysBody.innerHTML = `<tr><td colspan="6" data-empty="true" style="text-align: center; padding: 2rem; color: var(--error);">Không thể tải danh sách key.</td></tr>`;
     }
 }
 
 /**
  * Render bảng danh sách keys
  */
-function renderKeys(keys) {
-    if (!keys || keys.length === 0) {
-        keysBody.innerHTML = `<tr><td colspan="5" data-empty="true" style="text-align: center; padding: 2rem; color: var(--text-light);">Chưa có Key nào được tạo.</td></tr>`;
+function renderKeys() {
+    const tableContainer = document.getElementById('keys-table-container');
+
+    if (!allKeys || allKeys.length === 0) {
+        keysBody.innerHTML = `<tr><td colspan="6" data-empty="true" style="text-align: center; padding: 2rem; color: var(--text-light);">Chưa có Key nào được tạo.</td></tr>`;
+        const oldPagination = document.getElementById('keys-pagination');
+        if (oldPagination) oldPagination.remove();
         return;
     }
+
+    const totalPages = Math.max(1, Math.ceil(allKeys.length / KEYS_PER_PAGE));
+    currentKeysPage = Math.min(Math.max(currentKeysPage, 1), totalPages);
+
+    const start = (currentKeysPage - 1) * KEYS_PER_PAGE;
+    const keys = allKeys.slice(start, start + KEYS_PER_PAGE);
 
     keysBody.innerHTML = keys.map(k => {
         const expires = k.expires_at ? new Date(k.expires_at).toLocaleDateString('vi-VN') : 'Vĩnh viễn';
@@ -67,16 +160,22 @@ function renderKeys(keys) {
 
         return `
             <tr style="border-bottom: 1px solid var(--border);">
-                <td data-label="Tên" style="padding: 0.75rem;">${k.name}</td>
-                <td data-label="Key" style="padding: 0.75rem;"><code style="background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-weight: 600;">${k.key}</code></td>
+                <td data-label="Tên" style="padding: 0.75rem;">${escapeHtml(k.name)}</td>
+                <td data-label="Key" style="padding: 0.75rem;"><code style="background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-weight: 600;">${escapeHtml(k.key)}</code></td>
+                <td data-label="Ứng dụng" style="padding: 0.75rem;">${productBadge(k.product)}</td>
                 <td data-label="Hạn dùng" style="padding: 0.75rem;">${expires}</td>
                 <td data-label="Máy khóa" style="padding: 0.75rem;">${machine}</td>
                 <td data-label="Hành động" style="padding: 0.75rem; text-align: center;">
-                    <button class="btn-delete-key" data-key="${k.key}" style="background: none; border: none; color: #DC2626; cursor: pointer; font-weight: bold; font-size: 1.1rem;" title="Xóa key">&times;</button>
+                    <button class="btn-delete-key" data-key="${escapeHtml(k.key)}" style="background: none; border: none; color: #DC2626; cursor: pointer; font-weight: bold; font-size: 1.1rem;" title="Xóa key">&times;</button>
                 </td>
             </tr>
         `;
     }).join('');
+
+    const oldPagination = document.getElementById('keys-pagination');
+    if (oldPagination) oldPagination.remove();
+    tableContainer.insertAdjacentHTML('afterend', `<div id="keys-pagination">${renderKeyPagination(allKeys.length)}</div>`);
+    attachKeyPaginationActions();
 
     // Attach event listeners to delete buttons
     document.querySelectorAll('.btn-delete-key').forEach(btn => {
@@ -108,7 +207,7 @@ async function deleteKey(key) {
         }
 
         showToast("Đã xóa Key thành công!");
-        loadKeys();
+        loadKeys({ resetPage: false });
     } catch (error) {
         showToast(error.message, true);
     }
@@ -122,6 +221,7 @@ keyForm.addEventListener('submit', async (e) => {
 
     const password = adminPassInput.value;
     const name = keyNameInput.value;
+    const product = normalizeProduct(keyProductSelect.value);
     const expiryType = document.querySelector('input[name="expiry"]:checked').value;
 
     let days = null;
@@ -137,6 +237,7 @@ keyForm.addEventListener('submit', async (e) => {
     const payload = {
         password,
         name,
+        product,
         forever: expiryType === 'forever',
         days: days
     };
@@ -250,7 +351,7 @@ inputImport.addEventListener('change', async (e) => {
 btnCopy.addEventListener('click', () => {
     const key = displayKey.innerText;
     navigator.clipboard.writeText(key).then(() => {
-        btnCopy.innerText = "Coiped!";
+        btnCopy.innerText = "Copied!";
         setTimeout(() => btnCopy.innerText = "Copy", 2000);
     });
 });
