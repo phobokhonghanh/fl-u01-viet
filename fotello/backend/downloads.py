@@ -220,17 +220,36 @@ def download_single_enhance(
         # log(f"Step 09: Dữ liệu ảnh chưa sẵn sàng. enhance={enhance_id[:8]}", "warn")
         return None
 
-    # log(f"[DL-10] gs_uri={gs_uri}", "info")
-    # log(f"Step 10: Tải dữ liệu ảnh đầu ra. enhance={enhance_id[:8]}", "info")
     data = storage_download(gs_uri, access_token)
     name = src_name or f"{enhance_id}.jpg"
     if not Path(name).suffix:
         name += ".jpg"
     out_path = output_dir / name
     out_path.write_bytes(data)
-    # log(f"[DL-11] Lưu file output: {out_path}", "success")
-    # log(f"Step 11: Lưu file output {out_path}", "success")
     return out_path
+
+def check_download_single_enhance(
+    enhance_id: str,
+    access_token: str,
+    log: LogFn = None,
+    is_cancelled=None,
+) -> bool | False:
+    log = log or noop_log
+    is_cancelled = is_cancelled or (lambda: False)
+    if is_cancelled():
+        return False
+
+    doc = firestore_get(f"{FLD_ENHANCES}/{enhance_id}", access_token)
+    fields = doc.get("fields", {})
+    candidates = ("mergedImageUpsized", FLD_EDITED_UPSIZED, "mergedImage", FLD_EDITED, "outputImage")
+    gs_uri = ""
+    for key in candidates:
+        gs_uri = fields.get(key, {}).get(FLD_SV, "")
+        if gs_uri:
+            break
+    if not gs_uri:
+       return False
+    return True
 
 
 def fotello_download_listing(
@@ -250,16 +269,13 @@ def fotello_download_listing(
     id_token = tokens["id_token"]
     access_token = tokens["access_token"]
 
+    log(f"Step 02: Tạo thư mục output: {out_dir}", "info")
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    # log(f"[DL-02] Tạo thư mục output: {out_dir}", "info")
-    log(f"Step 02: Tạo thư mục output: {out_dir}", "info")
 
-    # log(f"[DL-03] Query enhances của listing={listing_id}", "info")
     log(f"Step 03: Kiểm tra thông tin listing={listing_id}", "info")
     enhances = fotello_list_enhances_for_listing(listing_id, log)
     successful = [e for e in enhances if e["has_image"]]
-    # log(f"  Tìm thấy {len(successful)} enhances có ảnh để patch", "info")
     log(f"Step 03: Tìm thấy {len(successful)} enhances có ảnh.", "info")
 
     for enh in successful:

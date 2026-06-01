@@ -1,4 +1,10 @@
 let fotelloListingsData = [];
+const folderStorageKeys = {
+    'fotello-inputdir': 'fotello.inputdir',
+    'fotello-upload-savedir': 'fotello.uploadSavedir',
+    'fotello-savedir': 'fotello.savedir'
+};
+
 function qs(id) {
     return document.getElementById(id);
 }
@@ -49,30 +55,97 @@ function resetProgress() {
     qs('progress-fill').style.width = '0%';
 }
 
-async function waitForPyWebView(maxWait = 5000) {
-    if (window.pywebview && window.pywebview.api) return true;
+function saveFolder(id, folder) {
+    const key = folderStorageKeys[id];
+    if (!key) return;
+    try {
+        if (folder) {
+            localStorage.setItem(key, folder);
+        } else {
+            localStorage.removeItem(key);
+        }
+    } catch (error) {
+    }
+}
+
+function updateUploadOutputDisplay(folder) {
+    const display = qs('fotello-upload-savedir-display');
+    if (!display) return;
+    display.textContent = folder || '';
+    display.title = folder || '';
+}
+
+function restoreSavedFolders() {
+    Object.entries(folderStorageKeys).forEach(([id, key]) => {
+        const input = qs(id);
+        if (!input) return;
+        try {
+            const folder = localStorage.getItem(key) || '';
+            if (!folder) return;
+            input.value = folder;
+            if (id === 'fotello-upload-savedir') {
+                updateUploadOutputDisplay(folder);
+            }
+        } catch (error) {
+        }
+    });
+}
+
+function bindFolderPersistence() {
+    Object.keys(folderStorageKeys).forEach(id => {
+        const input = qs(id);
+        if (!input) return;
+        input.addEventListener('change', () => {
+            const folder = input.value.trim();
+            saveFolder(id, folder);
+            if (id === 'fotello-upload-savedir') {
+                updateUploadOutputDisplay(folder);
+            }
+        });
+    });
+}
+
+function toCamelCase(name) {
+    return name.replace(/_([a-z])/g, (_match, letter) => letter.toUpperCase());
+}
+
+function findApiMethod(api, name) {
+    if (!api) return null;
+    if (typeof api[name] === 'function') return api[name].bind(api);
+    const camelName = toCamelCase(name);
+    if (typeof api[camelName] === 'function') return api[camelName].bind(api);
+    return null;
+}
+
+function listApiMethods(api) {
+    if (!api) return '';
+    return Object.keys(api).filter(key => typeof api[key] === 'function').join(', ');
+}
+
+function hasPyWebViewMethod(name) {
+    return Boolean(findApiMethod(window.pywebview?.api, name));
+}
+
+async function waitForPyWebView(maxWait = 10000, readyMethod = 'get_settings') {
+    if (hasPyWebViewMethod(readyMethod)) return true;
     return new Promise(resolve => {
         let resolved = false;
+        const finish = value => {
+            if (resolved) return;
+            resolved = true;
+            resolve(value);
+        };
         window.addEventListener('pywebviewready', () => {
-            if (!resolved) {
-                resolved = true;
-                resolve(true);
-            }
+            if (hasPyWebViewMethod(readyMethod)) finish(true);
         });
         const start = Date.now();
         const poll = setInterval(() => {
-            if (window.pywebview && window.pywebview.api) {
+            if (hasPyWebViewMethod(readyMethod)) {
                 clearInterval(poll);
-                if (!resolved) {
-                    resolved = true;
-                    resolve(true);
-                }
+                finish(true);
             } else if (Date.now() - start > maxWait) {
                 clearInterval(poll);
-                if (!resolved) {
-                    resolved = true;
-                    resolve(false);
-                }
+                finish(false);
             }
         }, 100);
     });
@@ -86,6 +159,22 @@ function requireApi() {
     return window.pywebview.api;
 }
 
+function getApiMethod(api, name) {
+    const method = findApiMethod(api, name);
+    if (method) return method;
+    const available = listApiMethods(api);
+    addLog(`PyWebView API thiếu hàm ${name}. Có: ${available || 'không rõ'}`, 'error');
+    return null;
+}
+
+async function callApi(name, ...args) {
+    const api = requireApi();
+    if (!api) return null;
+    const method = getApiMethod(api, name);
+    if (!method) return null;
+    return method(...args);
+}
+
 function showPanel(id) {
     document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
     document.querySelectorAll('.nav').forEach(nav => nav.classList.remove('active'));
@@ -95,7 +184,7 @@ function showPanel(id) {
 
 function fotelloOpenChrome() {
     const api = requireApi();
-    if (api) api.fotello_open_chrome();
+    if (api) callApi('fotello_open_chrome');
 }
 
 async function fotelloConnect() {
@@ -103,7 +192,8 @@ async function fotelloConnect() {
     if (!api) return;
     addLog('Đang kết nối Fotello. Hãy login app.fotello.co trong Chrome nếu chưa login.', 'info');
     setStatus('running', 'Đang kết nối...');
-    const result = await api.fotello_connect();
+    const result = await callApi('fotello_connect');
+    if (!result) return;
     if (result.ok) {
         qs('fotello-status').textContent = 'Đã kết nối';
         addLog('Đã kết nối Fotello', 'success');
@@ -117,7 +207,8 @@ async function fotelloConnect() {
 async function fotelloReconnect() {
     const api = requireApi();
     if (!api) return;
-    const result = await api.fotello_reconnect();
+    const result = await callApi('fotello_reconnect');
+    if (!result) return;
     qs('fotello-status').textContent = result.ok ? 'Đã kết nối' : 'Chưa kết nối';
 }
 
@@ -125,7 +216,8 @@ async function fotelloLoadListings() {
     const api = requireApi();
     if (!api) return;
     addLog('Đang tải danh sách listings...', 'info');
-    const result = await api.fotello_list_listings();
+    const result = await callApi('fotello_list_listings');
+    if (!result) return;
     if (!result.ok) {
         addLog(result.msg || 'Lỗi tải listings', 'error');
         return;
@@ -158,8 +250,11 @@ function fotelloToggleAll() {
 async function browseToInput(id) {
     const api = requireApi();
     if (!api) return;
-    const folder = await api.browse_folder();
-    if (folder) qs(id).value = folder;
+    const folder = await callApi('browse_folder');
+    if (folder) {
+        qs(id).value = folder;
+        saveFolder(id, folder);
+    }
 }
 
 function fotelloBrowseFolder() {
@@ -170,8 +265,15 @@ function fotelloBrowseInputFolder() {
     browseToInput('fotello-inputdir');
 }
 
-function fotelloBrowseUploadOutput() {
-    browseToInput('fotello-upload-savedir');
+async function fotelloBrowseUploadOutput() {
+    const api = requireApi();
+    if (!api) return;
+    const folder = await callApi('browse_folder');
+    if (!folder) return;
+    const input = qs('fotello-upload-savedir');
+    if (input) input.value = folder;
+    saveFolder('fotello-upload-savedir', folder);
+    updateUploadOutputDisplay(folder);
 }
 
 function selectedListings() {
@@ -193,7 +295,8 @@ async function fotelloStartDownload() {
         return;
     }
     addLog(`Bắt đầu tải ${selected.length} listings...`, 'info');
-    const result = await api.fotello_download(selected, savedir);
+    const result = await callApi('fotello_download', selected, savedir);
+    if (!result) return;
     if (!result.ok) {
         addLog(result.msg || 'Không bắt đầu được job download', 'error');
     }
@@ -222,7 +325,8 @@ async function fotelloStartUpload() {
         custom_style_id: null
     };
     addLog(`Bắt đầu jobs với thư mục ${inputdir}...`, 'info');
-    const result = await api.fotello_upload(inputdir, savedir, preferences);
+    const result = await callApi('fotello_upload', inputdir, savedir, preferences);
+    if (!result) return;
     if (!result.ok) {
         addLog(result.msg || 'Không bắt đầu được job upload', 'error');
     }
@@ -231,13 +335,14 @@ async function fotelloStartUpload() {
 function fotelloStop() {
     clearButtonFocus();
     const api = requireApi();
-    if (api) api.fotello_stop();
+    if (api) callApi('fotello_stop');
 }
 
 async function loadSettings() {
     const api = requireApi();
     if (!api) return;
-    const settings = await api.get_settings();
+    const settings = await callApi('get_settings');
+    if (!settings) return;
     qs('set-port').value = settings.port || 9222;
     qs('set-fotello-url').value = settings.fotello_url || 'https://app.fotello.co';
     qs('set-timeout').value = settings.timeout || 30;
@@ -256,7 +361,7 @@ async function loadSettings() {
 async function saveSettings() {
     const api = requireApi();
     if (!api) return;
-    await api.save_settings({
+    await callApi('save_settings', {
         port: parseInt(qs('set-port').value, 10),
         fotello_url: qs('set-fotello-url').value.trim(),
         timeout: parseInt(qs('set-timeout').value, 10),
@@ -277,8 +382,9 @@ async function saveSettings() {
 
 async function refreshBrowserInfo() {
     const api = requireApi();
-    if (!api || !api.get_browser_info) return;
-    const info = await api.get_browser_info();
+    if (!api) return;
+    const info = await callApi('get_browser_info');
+    if (!info) return;
     const version = info.version ? ` v${info.version}` : '';
     qs('chrome-path-display').textContent = 'Browser: ' + (info.path || 'chưa resolve');
     qs('browser-path-readonly').value = info.path || '';
@@ -288,11 +394,12 @@ async function refreshBrowserInfo() {
 
 async function repairBrowserRuntime() {
     const api = requireApi();
-    if (!api || !api.repair_browser_runtime) return;
+    if (!api) return;
     addLog('Đang repair Chrome runtime...', 'warn');
     setStatus('running', 'Đang repair runtime...');
     resetProgress();
-    const result = await api.repair_browser_runtime();
+    const result = await callApi('repair_browser_runtime');
+    if (!result) return;
     if (result.ok) {
         addLog('Repair runtime xong', 'success');
         await refreshBrowserInfo();
@@ -307,15 +414,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.nav').forEach(nav => {
         nav.addEventListener('click', () => showPanel(nav.dataset.panel));
     });
+    restoreSavedFolders();
+    bindFolderPersistence();
     const ready = await waitForPyWebView();
     if (!ready) {
-        addLog('Không thấy PyWebView bridge. Hãy chạy bằng python app.py.', 'warn');
+        addLog('PyWebView API chưa sẵn sàng. Hãy chạy bằng python main.py và kiểm tra js_api.', 'warn');
         return;
     }
-    const api = requireApi();
     await loadSettings();
     await refreshBrowserInfo();
-    const status = await api.fotello_status();
+    const status = await callApi('fotello_status');
+    if (!status) return;
     qs('fotello-status').textContent = status.connected ? 'Đã kết nối' : 'Chưa kết nối';
     if (!status.connected && status.has_saved_token) {
         await fotelloReconnect();

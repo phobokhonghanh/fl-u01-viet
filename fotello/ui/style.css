@@ -155,6 +155,33 @@ button.danger {
     margin: 0 0 4px;
 }
 
+.upload-output-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+    font-size: 13px;
+}
+
+.upload-output-row a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.upload-output-row a:hover {
+    text-decoration: underline;
+}
+
+.upload-output-row strong {
+    color: var(--text);
+    font-weight: 800;
+    max-width: min(420px, 100%);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .actions {
     display: flex;
     gap: 8px;

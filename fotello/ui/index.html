@@ -9,13 +9,6 @@
 <body>
     <main class="app">
         <aside class="sidebar">
-            <div class="brand">
-                <div class="brand-mark">F</div>
-                <div>
-                    <h1>Fotello</h1>
-                    <span>Desktop workflow</span>
-                </div>
-            </div>
             <button class="nav active" data-panel="download-panel">Listings</button>
             <button class="nav" data-panel="upload-panel">Upload & Enhance</button>
             <button class="nav" data-panel="settings-panel">Settings</button>
@@ -31,8 +24,13 @@
         <section class="content">
             <header class="topbar">
                 <div>
-                    <h2>Fotello Client</h2>
+                    <!-- <h2>Fotello Client</h2> -->
                     <p id="chrome-path-display">Chrome: đang kiểm tra...</p>
+                    <div class="upload-output-row">
+                        <input type="hidden" id="fotello-upload-savedir">
+                        <a href="#" onclick="fotelloBrowseUploadOutput(); return false;">Thư mục lưu ảnh: </a>
+                        <strong id="fotello-upload-savedir-display"></strong>
+                    </div>
                 </div>
                 <div class="actions">
                     <button id="btn-open-chrome" onclick="fotelloOpenChrome()">Mở Chrome</button>
@@ -53,11 +51,6 @@
                 <div id="fotello-listings" class="listing-box">
                     Bấm “Kết nối Fotello”, sau đó “Tải danh sách”.
                 </div>
-                <div class="field-row">
-                    <label>Thư mục lưu ảnh</label>
-                    <input type="text" id="fotello-savedir" placeholder="Đường dẫn folder output">
-                    <button onclick="fotelloBrowseFolder()">Chọn</button>
-                </div>
                 <button id="btn-start-download" class="primary wide" onclick="fotelloStartDownload()">Tải ảnh đã chọn</button>
             </section>
 
@@ -66,14 +59,9 @@
                     <h3>Upload & Enhance</h3>
                 </div>
                 <div class="field-row">
-                    <label>Thư mục ảnh gốc</label>
-                    <input type="text" id="fotello-inputdir" placeholder="JPG/RAW folder">
+                    <label>Chọn thư mục</label>
+                    <input type="text" id="fotello-inputdir" placeholder="Chọn thư mục">
                     <button onclick="fotelloBrowseInputFolder()">Chọn</button>
-                </div>
-                <div class="field-row">
-                    <label>Thư mục lưu kết quả</label>
-                    <input type="text" id="fotello-upload-savedir" placeholder="Output folder">
-                    <button onclick="fotelloBrowseUploadOutput()">Chọn</button>
                 </div>
                 <div class="grid">
                     <label>Bracket size
@@ -193,7 +181,7 @@
 
             <section class="logs">
                 <div class="log-head">
-                    <strong>Fotello log</strong>
+                    <strong>Log</strong>
                     <button onclick="clearLog()">Xóa log</button>
                 </div>
                 <textarea id="log-box" readonly spellcheck="false" aria-label="Fotello log"></textarea>
