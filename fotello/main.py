@@ -12,6 +12,8 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -62,9 +64,86 @@ settings: dict[str, Any] = {
 browser_state: dict[str, Any] = {"path": "", "source": "", "channel": "", "version": ""}
 chrome_process: subprocess.Popen | None = None
 window: Any = None
-fotello_running = False
-fotello_task_thread: threading.Thread | None = None
 license_client = LicenseClient()
+MAX_JOB_LOG_LINES = 500
+
+
+@dataclass
+class FotelloJob:
+    job_id: str
+    type: str
+    name: str
+    status: str = "pending"
+    total_count: int = 0
+    done_count: int = 0
+    uploaded_count: int = 0
+    downloaded_count: int = 0
+    output_path: str = ""
+    error: str = ""
+    stop_requested: bool = False
+    logs: list[str] = field(default_factory=list)
+
+    def snapshot(self, include_logs: bool = False) -> dict[str, Any]:
+        data = {
+            "job_id": self.job_id,
+            "type": self.type,
+            "name": self.name,
+            "status": self.status,
+            "total_count": self.total_count,
+            "done_count": self.done_count,
+            "uploaded_count": self.uploaded_count,
+            "downloaded_count": self.downloaded_count,
+            "output_path": self.output_path,
+            "error": self.error,
+        }
+        if include_logs:
+            data["logs"] = list(self.logs)
+        return data
+
+
+class FotelloJobManager:
+    def __init__(self) -> None:
+        self.jobs: dict[str, FotelloJob] = {}
+        self._lock = threading.Lock()
+
+    def create(self, job_type: str, name: str, output_path: str = "") -> FotelloJob:
+        job = FotelloJob(job_id=str(uuid.uuid4())[:8], type=job_type, name=name, output_path=output_path)
+        with self._lock:
+            self.jobs[job.job_id] = job
+        return job
+
+    def get(self, job_id: str) -> FotelloJob | None:
+        with self._lock:
+            return self.jobs.get(job_id)
+
+    def all(self) -> list[FotelloJob]:
+        with self._lock:
+            return list(self.jobs.values())
+
+    def stop(self, job_id: str | None = None) -> list[FotelloJob]:
+        with self._lock:
+            if job_id:
+                job = self.jobs.get(job_id)
+                jobs = [job] if job else []
+            else:
+                jobs = list(self.jobs.values())
+            for job in jobs:
+                if job.status in ("pending", "running"):
+                    job.stop_requested = True
+                    job.status = "stopped"
+            return jobs
+
+    def append_log(self, job: FotelloJob, msg: str, msg_type: str = "") -> str:
+        prefix = f"[{msg_type.upper()}] " if msg_type else ""
+        line = f"[{time.strftime('%H:%M:%S')}] {prefix}{msg}"
+        with self._lock:
+            if len(job.logs) >= MAX_JOB_LOG_LINES:
+                job.logs.pop(0)
+            job.logs.append(line)
+        return line
+
+
+fotello_jobs = FotelloJobManager()
 
 
 def _settings_path() -> str:
@@ -97,6 +176,19 @@ def save_settings(new_settings: dict[str, Any]) -> bool:
 
 def _js_string(value: Any) -> str:
     return json.dumps(str(value), ensure_ascii=False)
+
+
+def _js_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def js_call(function_name: str, *args: Any) -> None:
+    if window:
+        try:
+            params = ", ".join(_js_json(arg) for arg in args)
+            window.evaluate_js(f"{function_name}({params})")
+        except Exception:
+            pass
 
 
 def js_log(msg: str, msg_type: str = "") -> None:
@@ -138,6 +230,29 @@ def js_progress_reset() -> None:
             window.evaluate_js("resetProgress()")
         except Exception:
             pass
+
+
+def js_job_update(job: FotelloJob) -> None:
+    js_call("jobStatus", job.snapshot())
+
+
+def js_job_log(job: FotelloJob, msg: str, msg_type: str = "") -> None:
+    line = fotello_jobs.append_log(job, msg, msg_type)
+    js_call("jobLog", job.job_id, line)
+
+
+def js_job_progress(job: FotelloJob, current: int, total: int) -> None:
+    job.done_count = int(current)
+    job.total_count = int(total)
+    js_call("jobProgress", job.snapshot())
+
+
+def js_job_counts(job: FotelloJob, uploaded: int | None = None, downloaded: int | None = None) -> None:
+    if uploaded is not None:
+        job.uploaded_count = int(uploaded)
+    if downloaded is not None:
+        job.downloaded_count = int(downloaded)
+    js_call("jobProgress", job.snapshot())
 
 
 def open_ui_page(filename: str) -> bool:
@@ -390,38 +505,49 @@ class Api:
             return {"ok": False, "msg": str(exc), "listings": []}
 
     def fotello_download(self, listing_ids: list[str], savedir: str) -> dict[str, Any]:
-        global fotello_running, fotello_task_thread
         license_ok, license_msg = ensure_license_active()
         if not license_ok:
             return {"ok": False, "msg": license_msg or "License chưa active"}
-        if fotello_running:
-            return {"ok": False, "msg": "Fotello task đang chạy"}
-        fotello_running = True
+        if not listing_ids:
+            return {"ok": False, "msg": "Chưa chọn listing nào"}
+        if not savedir:
+            return {"ok": False, "msg": "Chưa chọn thư mục lưu"}
+
+        job = fotello_jobs.create("download", f"Download {len(listing_ids)} listings")
+        job_output_dir = Path(savedir) / job.job_id
+        job.output_path = str(job_output_dir)
+        job.status = "running"
+        js_job_update(job)
 
         def _run() -> None:
-            global fotello_running
+            js_job_update(job)
             try:
                 count = fotello.fotello_batch_download(
-                    listing_ids, savedir, js_log, js_progress, lambda: not fotello_running
+                    listing_ids,
+                    str(job_output_dir),
+                    lambda msg, msg_type="": js_job_log(job, msg, msg_type),
+                    lambda cur, total: js_job_progress(job, cur, total),
+                    lambda: job.stop_requested,
                 )
-                js_log(f"Fotello tải xong {count} ảnh", "success")
-                js_status("idle", "Hoàn tất")
+                job.downloaded_count = int(count)
+                if job.stop_requested:
+                    job.status = "stopped"
+                    js_job_log(job, "Đã dừng job tải.", "warn")
+                else:
+                    job.status = "success"
+                    js_job_log(job, f"Fotello tải xong {count} ảnh", "success")
             except Exception as exc:
                 print_system_exception("main.Api.fotello_download job", exc)
-                js_log(f"Fotello lỗi: {exc}", "error")
-                js_status("idle", "Lỗi")
+                job.status = "failed"
+                job.error = str(exc)
+                js_job_log(job, f"Fotello lỗi: {exc}", "error")
             finally:
-                fotello_running = False
+                js_job_update(job)
+                self._set_jobs_status()
 
-        def _start_job() -> None:
-            global fotello_task_thread
-            js_status("running", "Đang tải Fotello...")
-            js_progress_reset()
-            fotello_task_thread = threading.Thread(target=_run, daemon=True)
-            fotello_task_thread.start()
-
-        threading.Timer(0.25, _start_job).start()
-        return {"ok": True}
+        threading.Thread(target=_run, daemon=True).start()
+        self._set_jobs_status()
+        return {"ok": True, "job": job.snapshot(include_logs=True)}
 
     def fotello_upload(
         self,
@@ -429,52 +555,98 @@ class Api:
         savedir: str,
         preferences: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        global fotello_running, fotello_task_thread
         license_ok, license_msg = ensure_license_active()
         if not license_ok:
             return {"ok": False, "msg": license_msg or "License chưa active"}
-        if fotello_running:
-            return {"ok": False, "msg": "Fotello task đang chạy"}
-        fotello_running = True
+        if not inputdir:
+            return {"ok": False, "msg": "Chưa chọn thư mục ảnh gốc"}
+        if not savedir:
+            return {"ok": False, "msg": "Chưa chọn thư mục lưu kết quả"}
+        preferences = preferences or {}
+        listing_prefix = str(preferences.get("listing_name_prefix") or "").strip() or "AutoHDR Upload"
+        job_name = listing_prefix + " - " + time.strftime("%d %m, %Y %H:%M")
+        job = fotello_jobs.create("upload", job_name)
+        job_output_dir = Path(savedir) / job.job_id
+        job.output_path = str(job_output_dir)
+        job.status = "running"
+        js_job_update(job)
 
         def _run() -> None:
-            global fotello_running
+            js_job_update(job)
             try:
-                results = fotello.fotello_upload_and_enhance(
+                count = fotello.fotello_upload_and_enhance(
                     inputdir,
-                    savedir,
-                    js_log,
-                    js_progress,
-                    lambda: not fotello_running,
+                    str(job_output_dir),
+                    lambda msg, msg_type="": js_job_log(job, msg, msg_type),
+                    lambda cur, total: js_job_progress(job, cur, total),
+                    lambda: job.stop_requested,
                     preferences,
                     settings,
+                    lambda uploaded=None, downloaded=None: js_job_counts(job, uploaded, downloaded),
                 )
-                js_log(f"Fotello upload/download xong {len(results)} ảnh", "success")
-                js_status("idle", "Hoàn tất")
+                job.downloaded_count = int(count or 0)
+                if job.stop_requested:
+                    job.status = "stopped"
+                    js_job_log(job, "Đã dừng job upload/enhance.", "warn")
+                else:
+                    job.status = "success"
+                    js_job_log(job, f"Fotello upload/download xong {job.downloaded_count} ảnh", "success")
             except Exception as exc:
                 print_system_exception("main.Api.fotello_upload job", exc)
-                js_log(f"Fotello lỗi: {exc}", "error")
-                js_status("idle", "Lỗi")
+                job.status = "failed"
+                job.error = str(exc)
+                js_job_log(job, f"Fotello lỗi: {exc}", "error")
             finally:
-                fotello_running = False
+                js_job_update(job)
+                self._set_jobs_status()
 
-        def _start_job() -> None:
-            global fotello_task_thread
-            js_status("running", "Đang upload/enhance Fotello...")
-            js_progress_reset()
-            fotello_task_thread = threading.Thread(target=_run, daemon=True)
-            fotello_task_thread.start()
+        threading.Thread(target=_run, daemon=True).start()
+        self._set_jobs_status()
+        return {"ok": True, "job": job.snapshot(include_logs=True)}
 
-        threading.Timer(0.25, _start_job).start()
-        return {"ok": True}
+    def fotello_jobs(self) -> list[dict[str, Any]]:
+        return [job.snapshot() for job in fotello_jobs.all()]
 
-    def fotello_stop(self) -> dict[str, Any]:
-        global fotello_running
-        fotello_running = False
-        js_log("Đã yêu cầu dừng Fotello task.", "warn")
-        js_status("idle", "Đã dừng")
-        js_progress_reset()
-        return {"ok": True}
+    def fotello_job_logs(self, job_id: str) -> list[str]:
+        job = fotello_jobs.get(job_id)
+        return list(job.logs) if job else []
+
+    def fotello_open_job_folder(self, job_id: str) -> dict[str, Any]:
+        job = fotello_jobs.get(job_id)
+        if not job or not job.output_path:
+            return {"ok": False, "msg": "Job chưa có thư mục output"}
+        path = os.path.abspath(job.output_path)
+        if not os.path.exists(path):
+            return {"ok": False, "msg": "Thư mục output không tồn tại"}
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(path)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+            return {"ok": True}
+        except Exception as exc:
+            print_system_exception("main.Api.fotello_open_job_folder", exc)
+            return {"ok": False, "msg": str(exc)}
+
+    def fotello_stop(self, job_id: str | None = None) -> dict[str, Any]:
+        stopped = fotello_jobs.stop(job_id)
+        for job in stopped:
+            js_job_log(job, "Đã yêu cầu dừng Fotello job.", "warn")
+            js_job_update(job)
+        self._set_jobs_status()
+        return {"ok": True, "jobs": [job.snapshot() for job in stopped]}
+
+    def _running_job_count(self) -> int:
+        return sum(1 for job in fotello_jobs.all() if job.status == "running")
+
+    def _set_jobs_status(self) -> None:
+        running = self._running_job_count()
+        if running:
+            js_status("running", f"{running} job đang chạy")
+        else:
+            js_status("idle", "Sẵn sàng")
 
 
 def main() -> None:

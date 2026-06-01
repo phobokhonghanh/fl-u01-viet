@@ -28,6 +28,7 @@ from .constants import (
     POLL_TIMEOUT,
 )
 from .downloads import (
+    check_download_single_enhance,
     download_single_enhance,
     fotello_batch_download,
     fotello_download_listing,
@@ -75,10 +76,12 @@ def fotello_upload_and_enhance(
     is_cancelled=None,
     preferences: dict[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
+    count_fn=None,
 ) -> list[str]:
     log = log or noop_log
     progress_fn = progress_fn or (lambda cur, total: None)
     is_cancelled = is_cancelled or (lambda: False)
+    count_fn = count_fn or (lambda uploaded=None, downloaded=None: None)
     if not FOTELLO_STATE.get("connected"):
         raise RuntimeError("Chưa kết nối Fotello")
 
@@ -108,7 +111,8 @@ def fotello_upload_and_enhance(
     # log(f"📂 Đã tìm thấy {total_images} ảnh trong thư mục. Bắt đầu upload...", "info")
     log(f"Step 01: Kiểm tra input - tìm thấy {total_images} ảnh hợp lệ.", "info")
 
-    listing_name = "AutoHDR Upload - " + time.strftime("%d %m, %Y %H:%M")
+    listing_prefix = str(preferences.get("listing_name_prefix") or "").strip() or "AutoHDR Upload"
+    listing_name = listing_prefix + " - " + time.strftime("%d %m, %Y %H:%M")
     bracket_size = int(preferences.get("bracket_size") or 1)
     brackets = [images[i : i + bracket_size] for i in range(0, len(images), bracket_size)]
     total_work = total_images + len(brackets)
@@ -129,9 +133,11 @@ def fotello_upload_and_enhance(
             img_path, upload_id = future.result()
             if upload_id:
                 uploaded[img_path] = upload_id
+                count_fn(uploaded=len(uploaded), downloaded=0)
             done += 1
             progress_fn(done, total_work)
     # log(f"  ✔ Đã upload xong {len(uploaded)} ảnh.", "success")
+    count_fn(uploaded=len(uploaded), downloaded=0)
     log(f"Step 03: Hoàn tất upload - {len(uploaded)}/{total_images} ảnh.", "success")
     if is_cancelled():
         return []
@@ -150,7 +156,6 @@ def fotello_upload_and_enhance(
         id_token,
     )
     listing_id = listing_result["id"]
-    # log(f"  ✔ Đã tạo listing {listing_id[:8]} với {len(brackets)} HDR brackets", "success")
     log(f"Step 05: Tạo listing thành công - {listing_id[:8]} / {len(brackets)} HDR brackets.", "success")
 
     # log(f"Kích hoạt xử lý enhance và patch watermark...", "info")
@@ -183,45 +188,38 @@ def fotello_upload_and_enhance(
                 log=log,
             )
             names = ", ".join(p.name for p in bracket)
-            # log(f"  ✔ [{names}]", "success")
             log(f"Step 06: [{names}]", "success")
         done += 1
         progress_fn(done, total_work)
 
-    out_dir = Path(output_dir) / f"listing_{listing_id[:8]}"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    log(f"Step 07: Tạo thư mục output - {out_dir}", "info")
-    downloaded: list[str] = []
+    count_download = 0
     poll_timeout = max(30.0, float(_setting_number(settings, "poll_timeout", POLL_TIMEOUT)))
     deadline = time.time() + poll_timeout
     pending = set(enhance_ids)
     failed_items: set[str] = set()
     poll_attempt = 0
 
-    # log(f"Kiểm tra trạng thái...", "info")
-    log("Step 08: Kiểm tra trạng thái và tải ảnh...", "info")
+    log("Step 08: Kiểm tra trạng thái ảnh...", "info")
     while pending and time.time() < deadline and not is_cancelled():
         poll_attempt += 1
         ready_count = 0
         for enhance_id in list(pending):
             try:
-                path = download_single_enhance(
+                check = check_download_single_enhance(
                     enhance_id,
                     access_token,
-                    out_dir,
                     log=log,
                     is_cancelled=is_cancelled,
                 )
             except Exception as exc:
                 print_system_exception(f"service.fotello_upload_and_enhance download enhance={enhance_id}", exc)
                 failed_items.add(enhance_id)
-                path = None
-            if path:
-                downloaded.append(str(path))
+                check = False
+            if check is True:
+                count_download += 1
                 pending.discard(enhance_id)
                 failed_items.discard(enhance_id)
                 ready_count += 1
-        # log(f"Step 08: Lỗi khi kiểm tra/tải ảnh - {failed_count} mục lỗi.", "error")
         if pending:
             interval = _next_poll_interval(settings, poll_attempt, ready_count)
             log(
@@ -231,12 +229,19 @@ def fotello_upload_and_enhance(
             )
             _poll_sleep(interval, is_cancelled)
         elif ready_count:
-            log(f"Step 08: Tải ảnh hoàn tất - ready={len(downloaded)}/{len(enhance_ids)}.", "success")
-    error_count = len(set(pending) | failed_items)
-    if error_count:
-        log(f"Step 08: Lỗi {error_count}/{len(enhance_ids)} mục chưa tải được.", "error")
-    # log(f"Hoàn tất job upload/download {len(downloaded)} ảnh.", "success")
-    return downloaded
+            log(f"Step 08: Trạng thái kiểm tra - ready={count_download}/{len(enhance_ids)}.", "success")
+
+    downloaded = fotello_download_listing(listing_id=listing_id, output_dir=str(output_dir), log=log, is_cancelled=is_cancelled)
+    total_downloaded = len(downloaded)
+    count_fn(downloaded=total_downloaded)
+    if total_downloaded >= count_download:
+        log(f"Hoàn tất với {total_downloaded} ảnh được tải về.", "info")
+    else :
+        error_count = len(failed_items)
+        if  error_count > 0:
+            log(f"Lỗi {error_count}/{len(enhance_ids)} mục.", "error")
+
+    return total_downloaded
 
 
 __all__ = [
