@@ -1,4 +1,7 @@
 let fotelloListingsData = [];
+let fotelloJobs = {};
+let selectedJobId = null;
+let appLogLines = [];
 const folderStorageKeys = {
     'fotello-inputdir': 'fotello.inputdir',
     'fotello-upload-savedir': 'fotello.uploadSavedir',
@@ -25,13 +28,17 @@ function clearButtonFocus() {
 function addLog(msg, type = '') {
     const ts = new Date().toLocaleTimeString('vi-VN', { hour12: false });
     const prefix = type ? `[${type.toUpperCase()}] ` : '';
-    const box = qs('log-box');
-    box.value += `[${ts}] ${prefix}${msg}\n`;
-    box.scrollTop = box.scrollHeight;
+    appLogLines.push(`[${ts}] ${prefix}${msg}`);
+    if (!selectedJobId) renderLogBox();
 }
 
 function clearLog() {
-    qs('log-box').value = '';
+    if (selectedJobId && fotelloJobs[selectedJobId]) {
+        fotelloJobs[selectedJobId].logs = [];
+    } else {
+        appLogLines = [];
+    }
+    renderLogBox();
 }
 
 function updateProgress(current, total, pct) {
@@ -103,6 +110,141 @@ function bindFolderPersistence() {
             }
         });
     });
+}
+
+function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function normalizeJob(job) {
+    const existing = fotelloJobs[job.job_id] || {};
+    fotelloJobs[job.job_id] = {
+        logs: existing.logs || [],
+        ...existing,
+        ...job,
+        logs: job.logs || existing.logs || []
+    };
+    return fotelloJobs[job.job_id];
+}
+
+function jobStatusText(status) {
+    return {
+        pending: 'Chờ chạy',
+        running: 'Đang chạy',
+        success: 'Thành công',
+        failed: 'Thất bại',
+        stopped: 'Đã dừng'
+    }[status] || status || 'Không rõ';
+}
+
+function renderJobs() {
+    const list = qs('job-list');
+    if (!list) return;
+    const jobs = Object.values(fotelloJobs);
+    qs('job-count').textContent = String(jobs.length);
+    if (!jobs.length) {
+        list.innerHTML = '<div class="empty">Chưa có job nào</div>';
+        return;
+    }
+    list.innerHTML = jobs.map(job => {
+        const active = job.job_id === selectedJobId ? ' active' : '';
+        const done = Number(job.done_count || 0);
+        const uploaded = Number(job.uploaded_count || 0);
+        const downloaded = Number(job.downloaded_count || 0);
+        const leftCount = job.type === 'upload' ? uploaded : done;
+        const countText = `${leftCount}/${downloaded}`;
+        const folderButton = job.status === 'success' && job.output_path
+            ? `<button class="job-folder-btn" onclick="fotelloOpenJobFolder(event, '${job.job_id}')">📂</button>`
+            : '';
+        return `
+            <div class="job-item${active}" onclick="selectJob('${job.job_id}')">
+                <div class="job-main">
+                    <strong class="job-item-id">#${escapeHtml(job.job_id)}</strong>
+                    <span class="job-item-name" title="${escapeHtml(job.name)}">${escapeHtml(job.name)}</span>
+                    <span class="job-item-count">${escapeHtml(countText)}</span>
+                </div>
+                <div class="job-side">
+                    <span>${folderButton}</span>
+                    <span class="job-item-status ${escapeHtml(job.status)}">${escapeHtml(jobStatusText(job.status))}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderLogBox() {
+    const box = qs('log-box');
+    if (!box) return;
+    const title = qs('log-title');
+    const job = selectedJobId ? fotelloJobs[selectedJobId] : null;
+    const lines = job ? (job.logs || []) : appLogLines;
+    if (title) {
+        title.textContent = job ? `Log: Job ${job.job_id}` : 'Log';
+    }
+    box.value = lines.join('\n');
+    if (box.value) box.value += '\n';
+    box.scrollTop = box.scrollHeight;
+}
+
+async function selectJob(jobId) {
+    selectedJobId = jobId;
+    renderJobs();
+    renderLogBox();
+    const logs = await callApi('fotello_job_logs', jobId);
+    if (Array.isArray(logs) && fotelloJobs[jobId]) {
+        fotelloJobs[jobId].logs = logs;
+        renderLogBox();
+    }
+}
+
+function upsertJob(job, select = false) {
+    if (!job || !job.job_id) return;
+    normalizeJob(job);
+    if (select || !selectedJobId) {
+        selectedJobId = job.job_id;
+    }
+    renderJobs();
+    renderLogBox();
+    updateGlobalJobStatus();
+}
+
+function updateGlobalJobStatus() {
+    const running = Object.values(fotelloJobs).filter(job => job.status === 'running').length;
+    if (running > 0) {
+        setStatus('running', `${running} job đang chạy`);
+    } else {
+        setStatus('idle', 'Sẵn sàng');
+    }
+}
+
+function jobLog(jobId, line) {
+    const job = fotelloJobs[jobId] || normalizeJob({ job_id: jobId, name: `Job ${jobId}`, status: 'running' });
+    job.logs = job.logs || [];
+    job.logs.push(line);
+    if (job.logs.length > 500) job.logs.shift();
+    if (jobId === selectedJobId) renderLogBox();
+}
+
+function jobProgress(job) {
+    upsertJob(job);
+}
+
+function jobStatus(job) {
+    upsertJob(job);
+}
+
+async function fotelloOpenJobFolder(event, jobId) {
+    event.stopPropagation();
+    const result = await callApi('fotello_open_job_folder', jobId);
+    if (result && !result.ok) {
+        addLog(result.msg || 'Không mở được thư mục job', 'error');
+    }
 }
 
 function toCamelCase(name) {
@@ -299,7 +441,9 @@ async function fotelloStartDownload() {
     if (!result) return;
     if (!result.ok) {
         addLog(result.msg || 'Không bắt đầu được job download', 'error');
+        return;
     }
+    upsertJob(result.job, true);
 }
 
 async function fotelloStartUpload() {
@@ -322,6 +466,7 @@ async function fotelloStartUpload() {
         exterior_sky_replacement: qs('fotello-pref-sky').value,
         perspective_correction: qs('fotello-pref-perspective').value,
         cloud_style: qs('fotello-pref-cloud').value,
+        listing_name_prefix: qs('fotello-listing-name').value.trim(),
         custom_style_id: null
     };
     addLog(`Bắt đầu jobs với thư mục ${inputdir}...`, 'info');
@@ -329,13 +474,20 @@ async function fotelloStartUpload() {
     if (!result) return;
     if (!result.ok) {
         addLog(result.msg || 'Không bắt đầu được job upload', 'error');
+        return;
     }
+    upsertJob(result.job, true);
 }
 
 function fotelloStop() {
     clearButtonFocus();
     const api = requireApi();
-    if (api) callApi('fotello_stop');
+    if (!api) return;
+    if (!selectedJobId) {
+        addLog('Chưa chọn job để dừng', 'warn');
+        return;
+    }
+    callApi('fotello_stop', selectedJobId);
 }
 
 async function loadSettings() {
@@ -410,6 +562,15 @@ async function repairBrowserRuntime() {
     setStatus('idle', 'Repair thất bại');
 }
 
+async function loadJobs() {
+    const jobs = await callApi('fotello_jobs');
+    if (!Array.isArray(jobs)) return;
+    jobs.forEach(job => normalizeJob(job));
+    renderJobs();
+    renderLogBox();
+    updateGlobalJobStatus();
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.nav').forEach(nav => {
         nav.addEventListener('click', () => showPanel(nav.dataset.panel));
@@ -423,6 +584,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     await loadSettings();
     await refreshBrowserInfo();
+    await loadJobs();
     const status = await callApi('fotello_status');
     if (!status) return;
     qs('fotello-status').textContent = status.connected ? 'Đã kết nối' : 'Chưa kết nối';
@@ -435,3 +597,8 @@ window.addLog = addLog;
 window.setStatus = setStatus;
 window.updateProgress = updateProgress;
 window.resetProgress = resetProgress;
+window.jobLog = jobLog;
+window.jobProgress = jobProgress;
+window.jobStatus = jobStatus;
+window.selectJob = selectJob;
+window.fotelloOpenJobFolder = fotelloOpenJobFolder;

@@ -76,10 +76,12 @@ def fotello_upload_and_enhance(
     is_cancelled=None,
     preferences: dict[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
+    count_fn=None,
 ) -> list[str]:
     log = log or noop_log
     progress_fn = progress_fn or (lambda cur, total: None)
     is_cancelled = is_cancelled or (lambda: False)
+    count_fn = count_fn or (lambda uploaded=None, downloaded=None: None)
     if not FOTELLO_STATE.get("connected"):
         raise RuntimeError("Chưa kết nối Fotello")
 
@@ -109,7 +111,8 @@ def fotello_upload_and_enhance(
     # log(f"📂 Đã tìm thấy {total_images} ảnh trong thư mục. Bắt đầu upload...", "info")
     log(f"Step 01: Kiểm tra input - tìm thấy {total_images} ảnh hợp lệ.", "info")
 
-    listing_name = "AutoHDR Upload - " + time.strftime("%d %m, %Y %H:%M")
+    listing_prefix = str(preferences.get("listing_name_prefix") or "").strip() or "AutoHDR Upload"
+    listing_name = listing_prefix + " - " + time.strftime("%d %m, %Y %H:%M")
     bracket_size = int(preferences.get("bracket_size") or 1)
     brackets = [images[i : i + bracket_size] for i in range(0, len(images), bracket_size)]
     total_work = total_images + len(brackets)
@@ -130,9 +133,11 @@ def fotello_upload_and_enhance(
             img_path, upload_id = future.result()
             if upload_id:
                 uploaded[img_path] = upload_id
+                count_fn(uploaded=len(uploaded), downloaded=0)
             done += 1
             progress_fn(done, total_work)
     # log(f"  ✔ Đã upload xong {len(uploaded)} ảnh.", "success")
+    count_fn(uploaded=len(uploaded), downloaded=0)
     log(f"Step 03: Hoàn tất upload - {len(uploaded)}/{total_images} ảnh.", "success")
     if is_cancelled():
         return []
@@ -226,10 +231,11 @@ def fotello_upload_and_enhance(
         elif ready_count:
             log(f"Step 08: Trạng thái kiểm tra - ready={count_download}/{len(enhance_ids)}.", "success")
 
-    downloaded =fotello_download_listing(listing_id=listing_id, output_dir=str(output_dir), log=log, is_cancelled=is_cancelled)
+    downloaded = fotello_download_listing(listing_id=listing_id, output_dir=str(output_dir), log=log, is_cancelled=is_cancelled)
     total_downloaded = len(downloaded)
+    count_fn(downloaded=total_downloaded)
     if total_downloaded >= count_download:
-        log(f"Step 09: Hoàn tất với {total_downloaded} ảnh được tải về.", "info")
+        log(f"Hoàn tất với {total_downloaded} ảnh được tải về.", "info")
     else :
         error_count = len(failed_items)
         if  error_count > 0:

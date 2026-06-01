@@ -62,15 +62,15 @@ def _format_listing_timestamp(value: str) -> str:
         return "-"
 
 
-def _parse_upload_name_datetime(name: str) -> datetime | None:
-    prefix = "AutoHDR Upload - "
-    if not name.startswith(prefix):
+def _parse_listing_name_datetime(name: str) -> datetime | None:
+    separator = " - "
+    if separator not in name:
         return None
-    raw_value = name[len(prefix) :].strip()
+    raw_value = name.rsplit(separator, 1)[-1].strip()
     try:
         return datetime.strptime(raw_value, "%d %m, %Y %H:%M").replace(tzinfo=timezone.utc)
     except ValueError as exc:
-        print_system_exception("downloads._parse_upload_name_datetime", exc)
+        print_system_exception("downloads._parse_listing_name_datetime", exc)
         return None
 
 
@@ -111,7 +111,7 @@ def fotello_list_listings(log: LogFn = None) -> list[dict[str, object]]:
         created_at = _format_listing_timestamp(created)
         created_sort = _parse_timestamp_sort_value(created)
         if not created_sort:
-            created_from_name = _parse_upload_name_datetime(name)
+            created_from_name = _parse_listing_name_datetime(name)
             if created_from_name:
                 created_sort = created_from_name.timestamp()
                 created_at = created_from_name.strftime("%Y-%m-%d %H:%M")
@@ -269,8 +269,8 @@ def fotello_download_listing(
     id_token = tokens["id_token"]
     access_token = tokens["access_token"]
 
-    log(f"Step 02: Tạo thư mục output: {out_dir}", "info")
     out_dir = Path(output_dir)
+    log(f"Step 02: Tạo thư mục output: {out_dir}", "info")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     log(f"Step 03: Kiểm tra thông tin listing={listing_id}", "info")
@@ -309,8 +309,8 @@ def fotello_download_listing(
                         return results
                     if fname.endswith("/"):
                         continue
-                    suffix = Path(fname).suffix or ".jpg"
-                    file_path = out_dir / f"{idx:03d}{suffix}"
+                    # suffix = Path(fname).suffix or ".jpg"
+                    file_path = out_dir / Path(fname).name
                     file_path.write_bytes(zf.read(fname))
                     results.append(str(file_path))
             if results:

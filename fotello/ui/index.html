@@ -19,6 +19,15 @@
                     <span id="fotello-status">Chưa kết nối</span>
                 </div>
             </div>
+            <section class="job-sidebar">
+                <div class="job-sidebar-head">
+                    <strong>Jobs</strong>
+                    <span id="job-count">0</span>
+                </div>
+                <div id="job-list" class="job-list">
+                    <div class="empty">Chưa có job nào</div>
+                </div>
+            </section>
         </aside>
 
         <section class="content">
@@ -35,7 +44,7 @@
                 <div class="actions">
                     <button id="btn-open-chrome" onclick="fotelloOpenChrome()">Mở Chrome</button>
                     <button id="btn-connect" class="primary" onclick="fotelloConnect()">Kết nối Fotello</button>
-                    <button onclick="fotelloStop()" class="danger">Dừng</button>
+                    <button onclick="fotelloStop()" class="danger">Dừng job</button>
                 </div>
             </header>
 
@@ -62,6 +71,13 @@
                     <label>Chọn thư mục</label>
                     <input type="text" id="fotello-inputdir" placeholder="Chọn thư mục">
                     <button onclick="fotelloBrowseInputFolder()">Chọn</button>
+                </div>
+                <div class="field-row">
+                    <label>Tên listing</label>
+                    <div class="field-stack">
+                        <input type="text" id="fotello-listing-name" placeholder="AutoHDR Upload">
+                        <span class="field-note-danger">*Không thêm dấu '-' trong Tên listing</span>
+                    </div>
                 </div>
                 <div class="grid">
                     <label>Bracket size
@@ -181,7 +197,7 @@
 
             <section class="logs">
                 <div class="log-head">
-                    <strong>Log</strong>
+                    <strong id="log-title">Log</strong>
                     <button onclick="clearLog()">Xóa log</button>
                 </div>
                 <textarea id="log-box" readonly spellcheck="false" aria-label="Fotello log"></textarea>
