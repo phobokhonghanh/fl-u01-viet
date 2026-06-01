@@ -44,6 +44,7 @@ BASE_DIR = get_base_dir()
 EXE_DIR = get_exe_dir()
 UI_DIR = os.path.join(BASE_DIR, "ui")
 RUNTIME_DIR = os.path.join(EXE_DIR, "runtime")
+APP_ICON = os.path.join(UI_DIR, "logo.ico")
 
 settings: dict[str, Any] = {
     "port": 9222,
@@ -663,7 +664,7 @@ def main() -> None:
     index = os.path.join(UI_DIR, start_page)
     window = webview.create_window("Fotello Client", index, width=1180, height=760, js_api=Api())
     gui = "qt" if sys.platform.startswith("linux") else None
-    webview.start(debug=False, gui=gui)
+    webview.start(debug=False, gui=gui, icon=APP_ICON if os.path.exists(APP_ICON) else None)
 
 
 if __name__ == "__main__":
