@@ -108,7 +108,7 @@ def execute(
     urls = []
     
     for photo_id in ids:
-        for attempt in range(3):
+        for attempt in range(5):
             try:
                 url = f"/api/proxy/photos/{photo_id}/adjustments"
                 response = client.get(url)
@@ -129,11 +129,11 @@ def execute(
                     urls.append(base_url)
                 break  # Success, exit retry loop
             except Exception as e:
-                if attempt == 2:
+                if attempt == 4:
                     _log("ERROR", f"Lỗi 6.4 {e}")
                     return []
                 else:
-                     _log("WARNING", f"retry {attempt + 1}/10")
+                     _log("WARNING", f"retry {attempt + 1}/5")
     
     _log("INFO", f"Tìm thấy {len(urls)} ảnh đã xử lý")
     return urls
