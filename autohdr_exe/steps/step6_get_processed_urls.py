@@ -116,10 +116,10 @@ def execute(
             if "/watermarked/" in parsed_path:
                 s3_key = _extract_watermarked_s3_key(base_url)
                 urls.append(remove_watermark(client, photo_id, s3_key))
-            elif "/full/" in parsed_path:
-                urls.append(base_url)
+            # elif "/full/" in parsed_path:
+            #     urls.append(base_url)
             else:
-                raise ValueError(f"Lỗi 6.3.2")
+                urls.append(base_url)
         except Exception as e:
             _log("ERROR", f"Lỗi 6.4")
             return []
