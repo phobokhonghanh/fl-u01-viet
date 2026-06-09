@@ -103,26 +103,32 @@ def execute(
     urls = []
     
     for photo_id in ids:
-        try:
-            url = f"/api/proxy/photos/{photo_id}/adjustments"
-            response = client.get(url)
-            response.raise_for_status()
-            adjustments = response.json()
-            base_url = adjustments.get("base_url") if isinstance(adjustments, dict) else None
-            if not base_url:
-                raise ValueError("Lỗi 6.3.1")
+        for attempt in range(10):
+            try:
+                url = f"/api/proxy/photos/{photo_id}/adjustments"
+                response = client.get(url)
+                response.raise_for_status()
+                adjustments = response.json()
+                base_url = adjustments.get("base_url") if isinstance(adjustments, dict) else None
+                if not base_url:
+                    _log("ERROR", f"Lỗi 6.3.1 khong tim thay base_url")
+                    raise ValueError("Lỗi 6.3.1")
 
-            parsed_path = urlparse(base_url).path
-            if "/watermarked/" in parsed_path:
-                s3_key = _extract_watermarked_s3_key(base_url)
-                urls.append(remove_watermark(client, photo_id, s3_key))
-            elif "/full/" in parsed_path:
-                urls.append(base_url)
-            else:
-                raise ValueError(f"Lỗi 6.3.2")
-        except Exception as e:
-            _log("ERROR", f"Lỗi 6.4")
-            return []
+                parsed_path = urlparse(base_url).path
+                if "/watermarked/" in parsed_path:
+                    s3_key = _extract_watermarked_s3_key(base_url)
+                    urls.append(remove_watermark(client, photo_id, s3_key))
+                # elif "/full/" in parsed_path:
+                #     urls.append(base_url)
+                else:
+                    urls.append(base_url)
+                break  # Success, exit retry loop
+            except Exception as e:
+                if attempt == 9:
+                    _log("ERROR", f"Lỗi 6.4")
+                    return []
+                else:
+                     _log("WARNING", f"retry {attempt + 1}/10")
     
     _log("INFO", f"Tìm thấy {len(urls)} ảnh đã xử lý")
     return urls

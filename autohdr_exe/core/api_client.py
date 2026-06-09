@@ -33,6 +33,7 @@ class ApiClient:
         """
         Kiểm tra Key qua API, sử dụng cache 12h để hạn chế request.
         """
+        # return True
         if not key:
             return False
         
