@@ -41,10 +41,15 @@ def remove_watermark(client: HttpClient, photo_id: int, s3_key: str) -> str:
         "preserve_photo": True,
     }
 
-    response = client.post("/api/proxy/photos/finalize-adjustment", json_data=payload)
-    
-    response.raise_for_status()
-    data = response.json()
+    try:
+        response = client.post("/api/proxy/photos/finalize-adjustment", json_data=payload)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        status_code = getattr(getattr(e, "response", None), "status_code", None)
+        if status_code is not None:
+            raise ValueError(f"HTTP {status_code}") from e
+        raise ValueError("Lỗi remove watermark") from e
 
     if not isinstance(data, dict) or not data.get("success") or not data.get("url"):
         raise ValueError("Lỗi remove watermark")
@@ -103,7 +108,7 @@ def execute(
     urls = []
     
     for photo_id in ids:
-        for attempt in range(10):
+        for attempt in range(5):
             try:
                 url = f"/api/proxy/photos/{photo_id}/adjustments"
                 response = client.get(url)
@@ -124,11 +129,11 @@ def execute(
                     urls.append(base_url)
                 break  # Success, exit retry loop
             except Exception as e:
-                if attempt == 9:
-                    _log("ERROR", f"Lỗi 6.4")
+                if attempt == 4:
+                    _log("ERROR", f"Lỗi 6.4 {e}")
                     return []
                 else:
-                     _log("WARNING", f"retry {attempt + 1}/10")
+                     _log("WARNING", f"retry {attempt + 1}/5")
     
     _log("INFO", f"Tìm thấy {len(urls)} ảnh đã xử lý")
     return urls
