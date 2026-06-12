@@ -5,8 +5,6 @@ Main Application Controller — manages screen switching.
 import customtkinter as ctk
 from tkinterdnd2 import TkinterDnD
 from core.api_client import ApiClient
-from core.cache import cache
-from core.utils import get_hwid
 from core.pipeline import PipelineManager
 
 
@@ -22,7 +20,6 @@ class App(ctk.CTk):
         self.minsize(1000, 700)
 
         self.api = ApiClient()
-        self.hwid = get_hwid()
         self.pipeline_mgr = PipelineManager()
 
         # Container for screens
@@ -33,30 +30,25 @@ class App(ctk.CTk):
         self.screen_key = None
         self.screen_main = None
 
-        # Check cached key on startup
-        cached_key = cache.get("active_key")
-        if cached_key:
-            self._auto_check_key(cached_key)
-        else:
-            self.show_key_screen()
+        self._auto_check_key()
 
-    def _auto_check_key(self, key: str):
+    def _auto_check_key(self):
         """Auto-check cached key on startup."""
         try:
-            is_valid = self.api.check_key(key, self.hwid)
+            is_valid = self.api.check_key()
             if is_valid:
                 self.show_main_screen()
                 return
         except Exception:
             pass
-        # Key invalid — show key screen
-        self.show_key_screen()
+        # Key invalid or expired — show key screen
+        self.show_key_screen(self.api.last_check_status)
 
-    def show_key_screen(self):
+    def show_key_screen(self, license_status: str = ""):
         """Switch to key activation screen."""
         self._clear_screens()
         from ui.screen_key import ScreenKey
-        self.screen_key = ScreenKey(self.container, self)
+        self.screen_key = ScreenKey(self.container, self, license_status=license_status)
         self.screen_key.pack(fill="both", expand=True)
 
     def show_main_screen(self):

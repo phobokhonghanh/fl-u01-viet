@@ -1,5 +1,5 @@
 """
-API Client — Gọi API xác thực Key và tối ưu bằng Cache 12h.
+API Client — Gọi API xác thực Key và tối ưu bằng Cache 6h.
 """
 
 import requests
@@ -12,16 +12,17 @@ from core.utils import get_hwid
 
 logger = logging.getLogger(__name__)
 
-# Thời hạn Cache: 12 giờ (tính bằng giây)
-CACHE_DURATION = 12 * 60 * 60
+# Thời hạn Cache: 6 giờ (tính bằng giây)
+CACHE_DURATION = 6 * 60 * 60
 
 class ApiClient:
-    """Client for backend key validation with 12h caching."""
+    """Client for backend key validation with 6h caching."""
 
     def __init__(self, base_url: Optional[str] = None):
         if not base_url:
             base_url = os.getenv("AUTOHDR_API_BASE", "https://u01-viet-backend.up.railway.app")
         self.base_url = base_url.rstrip("/")
+        self.last_check_status = "idle"
 
     def _clear_license_cache(self):
         """Clear local license cache fields."""
@@ -29,64 +30,110 @@ class ApiClient:
         cache.delete("license_last_check")
         cache.delete("license_machine_id")
 
-    def check_key(self, key: str, machine_id: Optional[str] = None) -> bool:
-        """
-        Kiểm tra Key qua API, sử dụng cache 12h để hạn chế request.
-        """
-        # return True
-        if not key:
-            return False
-        
-        if not machine_id:
-            machine_id = get_hwid()
+    def _save_license_cache(self, key: str, machine_id: str, checked_at: float) -> None:
+        """Persist validated license data locally."""
+        cache.set("active_key", key)
+        cache.set("license_last_check", checked_at)
+        cache.set("license_machine_id", machine_id)
 
-        # --- 1. KIỂM TRA CACHE 12H ---
-        # Lấy thông tin từ core.cache (lưu trong file .cache nội bộ)
-        last_check = cache.get("license_last_check", 0)
+    def _get_cached_key_if_valid(self, machine_id: str) -> Optional[str]:
+        """Return cached key when the local license state is still valid."""
         cached_key = cache.get("active_key")
-        cached_machine_id = cache.get("license_machine_id", "")
-        
-        now = time.time()
-        
-        # Cache chỉ hợp lệ khi key + machine_id khớp và chưa quá TTL
-        if (
-            cached_key == key
-            and cached_machine_id == machine_id
-            and (now - float(last_check)) < CACHE_DURATION
-        ):
-            return True
+        cached_machine_id = cache.get("license_machine_id")
+        last_check = cache.get("license_last_check")
 
-        # --- 2. GỌI API THỰC TẾ ---
+        if not cached_key or not cached_machine_id or last_check in (None, ""):
+            self.last_check_status = "missing"
+            return None
+
+        if cached_machine_id != machine_id:
+            self._clear_license_cache()
+            self.last_check_status = "machine_mismatch"
+            return None
+
+        try:
+            last_check_ts = float(last_check)
+        except (TypeError, ValueError):
+            self._clear_license_cache()
+            self.last_check_status = "invalid_cache"
+            return None
+
+        now = time.time()
+        age = now - last_check_ts
+        if age < 0 and abs(age) > CACHE_DURATION:
+            self._clear_license_cache()
+            self.last_check_status = "clock_rollback"
+            return None
+
+        if age < 0:
+            self._clear_license_cache()
+            self.last_check_status = "invalid_cache"
+            return None
+
+        if age >= CACHE_DURATION:
+            self._clear_license_cache()
+            self.last_check_status = "expired"
+            return None
+
+        self.last_check_status = "valid_cached"
+        return cached_key
+
+    def _check_remote_key(self, key: str, machine_id: str) -> bool:
+        """Validate the provided key against the backend."""
+        now = time.time()
+
         try:
             res = requests.post(
                 f"{self.base_url}/api/key/active",
                 json={"key": key, "machine_id": machine_id},
                 timeout=15,
             )
-            
+
             if res.status_code == 200:
                 is_valid = res.json().get("valid", False)
-                
-                # Nếu Key hợp lệ -> Lưu vào cache để lần sau skip gọi API
                 if is_valid:
-                    cache.set("active_key", key)
-                    cache.set("license_last_check", now)
-                    cache.set("license_machine_id", machine_id)
-                return is_valid
-                
-            elif res.status_code == 403:
-                # Key bị khóa hoặc sai machine_id
+                    self._save_license_cache(key, machine_id, now)
+                    self.last_check_status = "valid_remote"
+                    return True
+
                 self._clear_license_cache()
+                self.last_check_status = "invalid"
                 return False
-                
+
+            if res.status_code == 403:
+                self._clear_license_cache()
+                self.last_check_status = "invalid"
+                return False
+
             res.raise_for_status()
-            
+
         except requests.exceptions.ConnectionError:
             logger.error("Không thể kết nối mạng để check key.")
+            self.last_check_status = "network_error"
         except Exception as e:
             logger.error(f"Lỗi kiểm tra key qua API: {e}")
+            self.last_check_status = "error"
 
-        # Trường hợp lỗi network hoặc server sập: 
-        # Nếu trước đó đã từng valid (có trong cache) thì có thể cho qua tạm thời nếu bạn muốn,
-        # nhưng ở đây ta chọn return False để đảm bảo bảo mật.
+        return False
+
+    def check_key(self, key: Optional[str] = None, machine_id: Optional[str] = None) -> bool:
+        """
+        Kiểm tra key theo 2 mode:
+        - Có input key: chỉ check key đó với backend.
+        - Không có input key: chỉ check local cache còn hạn hay không.
+        """
+        if not machine_id:
+            machine_id = get_hwid()
+
+        if key is not None:
+            normalized_key = key.strip() if isinstance(key, str) else None
+            if normalized_key == "":
+                self.last_check_status = "missing_input"
+                return False
+            if normalized_key:
+                return self._check_remote_key(normalized_key, machine_id)
+        else: 
+            cached_key = self._get_cached_key_if_valid(machine_id)
+            if cached_key:
+                return True
         return False

@@ -543,10 +543,6 @@ class ScreenMain(ctk.CTkFrame):
         if not self.selected_files:
             return
 
-        key = cache.get("active_key")
-        if not key:
-            return
-
         if not self.current_session:
             return
 
@@ -560,9 +556,9 @@ class ScreenMain(ctk.CTkFrame):
 
         def _do_check_and_start():
             # Re-check key in background
-            if not self.api.check_key(key, self.app.hwid):
+            if not self.api.check_key():
                 self.after(0, lambda: self.btn_process.configure(state="normal", text="BẮT ĐẦU XỬ LÝ"))
-                self.after(0, lambda: self.app.show_key_screen())
+                self.after(0, lambda: self.app.show_key_screen(self.api.last_check_status))
                 return
 
             # Start job on main thread
@@ -617,10 +613,6 @@ class ScreenMain(ctk.CTkFrame):
             return
         photoshoot_uuid = m.group(1)
 
-        key = cache.get("active_key")
-        if not key:
-            return
-
         if not self.current_session:
             return
 
@@ -633,9 +625,9 @@ class ScreenMain(ctk.CTkFrame):
         self.update_idletasks()
 
         def _do_check_and_start():
-            if not self.api.check_key(key, self.app.hwid):
+            if not self.api.check_key():
                 self.after(0, lambda: self.btn_process.configure(state="normal", text="BẮT ĐẦU XỬ LÝ"))
-                self.after(0, lambda: self.app.show_key_screen())
+                self.after(0, lambda: self.app.show_key_screen(self.api.last_check_status))
                 return
 
             # Start manual job on main thread
