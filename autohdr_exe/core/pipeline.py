@@ -212,6 +212,12 @@ class PipelineManager:
     def get_all_jobs(self) -> List[Job]:
         return list(self.jobs.values())
 
+    def clear_jobs(self) -> None:
+        """Remove all in-memory jobs and callbacks for the current session."""
+        with self._lock:
+            self.jobs.clear()
+            self._callbacks.clear()
+
     def delete_job_log(self, job_id: str) -> bool:
         """Delete the log file for a job."""
         log_path = get_job_log_path(job_id)
