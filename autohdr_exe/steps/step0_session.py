@@ -15,6 +15,7 @@ from typing import Optional
 from core.http_client import HttpClient
 from core.logger import log
 from core.cache import cache
+from core.stats_client import stats_client
 from core.utils import get_sessions_dir
 from models.schemas import SessionRecord
 
@@ -139,6 +140,7 @@ def execute(client: HttpClient, cookie: Optional[str] = None, email: Optional[st
         # Update cache
         cache.set("email", session.email)
         cache.set("cookie", session.cookie)
+        stats_client.mark_session(session.user_id)
 
         log(logger, "INFO", step, f"Xác thực thành công: {session.email}")
         return session
@@ -154,6 +156,7 @@ def execute(client: HttpClient, cookie: Optional[str] = None, email: Optional[st
                 return None
 
             log(logger, "INFO", step, f"Tìm thấy session: {session.email}")
+            stats_client.mark_session(session.user_id)
             return session
 
         log(logger, "INFO", step, f"Không tìm thấy session cho: {email}")
@@ -167,6 +170,7 @@ def execute(client: HttpClient, cookie: Optional[str] = None, email: Optional[st
             sessions = _update_session(sessions, session)
             _save_sessions(sessions)
             cache.set("email", session.email)
+            stats_client.mark_session(session.user_id)
             return session
         else:
             log(logger, "ERROR", step, "Cookie đã lưu không còn hợp lệ")

@@ -7,6 +7,7 @@ import base64
 import json
 import os
 import itertools
+import threading
 from core.utils import get_app_data_dir
 
 
@@ -17,6 +18,7 @@ LICENSE_SECRET = "admin"
 
 class AppCache:
     def __init__(self):
+        self._lock = threading.RLock()
         self.data = self._load()
 
     def _load(self):
@@ -49,28 +51,31 @@ class AppCache:
         return decoded.decode("utf-8")
 
     def get(self, key, default=None):
-        value = self.data.get(key, default)
-        if key not in LICENSE_CACHE_KEYS or value == default:
-            return value
+        with self._lock:
+            value = self.data.get(key, default)
+            if key not in LICENSE_CACHE_KEYS or value == default:
+                return value
 
-        try:
-            decoded = self._decode_license_value(value)
-            if key == "license_last_check":
-                return float(decoded)
-            return decoded
-        except Exception:
-            return default
+            try:
+                decoded = self._decode_license_value(value)
+                if key == "license_last_check":
+                    return float(decoded)
+                return decoded
+            except Exception:
+                return default
 
     def set(self, key, value):
-        if key in LICENSE_CACHE_KEYS:
-            value = self._encode_license_value(value)
-        self.data[key] = value
-        self._save()
+        with self._lock:
+            if key in LICENSE_CACHE_KEYS:
+                value = self._encode_license_value(value)
+            self.data[key] = value
+            self._save()
 
     def delete(self, key):
-        if key in self.data:
-            del self.data[key]
-            self._save()
+        with self._lock:
+            if key in self.data:
+                del self.data[key]
+                self._save()
 
 
 cache = AppCache()

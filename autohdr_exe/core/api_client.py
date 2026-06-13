@@ -8,6 +8,7 @@ import time
 import logging
 from typing import Optional
 from core.cache import cache
+from core.stats_client import stats_client
 from core.utils import get_hwid
 
 logger = logging.getLogger(__name__)
@@ -94,6 +95,7 @@ class ApiClient:
                 if is_valid:
                     self._save_license_cache(key, machine_id, now)
                     self.last_check_status = "valid_remote"
+                    stats_client.dispatch_async()
                     return True
 
                 self._clear_license_cache()

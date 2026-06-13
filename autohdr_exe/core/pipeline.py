@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from core.http_client import HttpClient
 from core.logger import log, setup_logger, setup_job_logger, get_job_log_path
 from core.cache import cache
+from core.stats_client import stats_client
 from core.utils import get_checkpoints_dir
 from models.schemas import PipelineContext, SessionRecord
 from steps import (
@@ -477,6 +478,7 @@ class PipelineManager:
             job.downloaded_count = len(downloaded)
             job.status = "completed"
             _log("INFO", 0, f"Đã tải {len(downloaded)} ảnh")
+            stats_client.append_runtime(context.unique_str)
             
             # Successful completion -> Delete checkpoint
             _delete_checkpoint()
@@ -641,6 +643,7 @@ class PipelineManager:
             job.downloaded_count = len(downloaded)
             job.status = "completed"
             _log("INFO", 0, f"Đã tải {len(downloaded)} ảnh từ share")
+            stats_client.append_runtime(photoshoot_uuid)
 
         except InterruptedError:
             job.status = "stopped"
