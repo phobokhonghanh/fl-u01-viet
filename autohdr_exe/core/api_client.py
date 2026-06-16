@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Thời hạn Cache: 6 giờ (tính bằng giây)
 CACHE_DURATION = 6 * 60 * 60
+# CACHE_DURATION = 60
 
 class ApiClient:
     """Client for backend key validation with 6h caching."""
@@ -72,8 +73,12 @@ class ApiClient:
             return None
 
         if age >= CACHE_DURATION:
-            self._clear_license_cache()
             self.last_check_status = "expired"
+            print(self.last_check_status )
+            is_valid = self._check_remote_key(cached_key, machine_id)
+            print(self.last_check_status )
+            if is_valid:
+                return cached_key
             return None
 
         self.last_check_status = "valid_cached"

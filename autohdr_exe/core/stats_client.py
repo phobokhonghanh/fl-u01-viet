@@ -15,8 +15,9 @@ from core.utils import get_hwid, get_logs_dir
 
 PRODUCT = "autohdr"
 MAX_RETRIES = 3
+# MAX_RETRIES = 1
 REQUEST_TIMEOUT = (5, 15)
-RETRY_DELAY_SECONDS = 1
+RETRY_DELAY_SECONDS = 3
 
 RUNTIME_FILE = os.path.join(get_logs_dir(), "runtime.log")
 PENDING_PATTERN = os.path.join(get_logs_dir(), "runtime.pending.*.log")
