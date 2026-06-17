@@ -177,9 +177,9 @@ class ScreenMain(ctk.CTkFrame):
         left_panel.grid_columnconfigure(0, weight=1)
         left_panel.grid_rowconfigure(0, weight=0)  # Mode buttons
         left_panel.grid_rowconfigure(1, weight=0)  # Project/Mode
-        left_panel.grid_rowconfigure(2, weight=1)  # Drop zone absorbs available height
+        left_panel.grid_rowconfigure(2, weight=0, minsize=200)  # Drop zone absorbs available height
         left_panel.grid_rowconfigure(3, weight=0)  # Job header
-        left_panel.grid_rowconfigure(4, weight=0, minsize=160)  # Compact job list, close to controls
+        left_panel.grid_rowconfigure(4, weight=1, minsize=160)  # Compact job list, close to controls
         left_panel.grid_rowconfigure(5, weight=0)  # Controls
 
         # --- Job List ---
@@ -196,9 +196,17 @@ class ScreenMain(ctk.CTkFrame):
         )
         self.btn_scan_failed.pack(side="right", padx=5)
 
+        self.btn_clear_jobs = ctk.CTkButton(
+            job_header, text="Clear", width=70, height=28,
+            command=self._clear_job_list,
+            fg_color="#DC2626", hover_color="#B91C1C",
+            font=("Arial", 12, "bold")
+        )
+        self.btn_clear_jobs.pack(side="right", padx=5)
+
         # Job list (below header)
         self.job_list_frame = ctk.CTkScrollableFrame(left_panel, label_text="", height=160)
-        self.job_list_frame.grid(row=4, column=0, sticky="ew", padx=8, pady=(6, 4))
+        self.job_list_frame.grid(row=4, column=0, sticky="nsew", padx=8, pady=(6, 4))
         
         # Bind mouse wheel for Linux
         self.job_list_frame.bind_all("<Button-4>", lambda e: self._on_mousewheel(e, self.job_list_frame))
@@ -543,10 +551,6 @@ class ScreenMain(ctk.CTkFrame):
         if not self.selected_files:
             return
 
-        key = cache.get("active_key")
-        if not key:
-            return
-
         if not self.current_session:
             return
 
@@ -560,9 +564,9 @@ class ScreenMain(ctk.CTkFrame):
 
         def _do_check_and_start():
             # Re-check key in background
-            if not self.api.check_key(key, self.app.hwid):
+            if not self.api.check_key():
                 self.after(0, lambda: self.btn_process.configure(state="normal", text="BẮT ĐẦU XỬ LÝ"))
-                self.after(0, lambda: self.app.show_key_screen())
+                self.after(0, lambda: self.app.show_key_screen(self.api.last_check_status))
                 return
 
             # Start job on main thread
@@ -617,10 +621,6 @@ class ScreenMain(ctk.CTkFrame):
             return
         photoshoot_uuid = m.group(1)
 
-        key = cache.get("active_key")
-        if not key:
-            return
-
         if not self.current_session:
             return
 
@@ -633,9 +633,9 @@ class ScreenMain(ctk.CTkFrame):
         self.update_idletasks()
 
         def _do_check_and_start():
-            if not self.api.check_key(key, self.app.hwid):
+            if not self.api.check_key():
                 self.after(0, lambda: self.btn_process.configure(state="normal", text="BẮT ĐẦU XỬ LÝ"))
-                self.after(0, lambda: self.app.show_key_screen())
+                self.after(0, lambda: self.app.show_key_screen(self.api.last_check_status))
                 return
 
             # Start manual job on main thread
@@ -875,6 +875,28 @@ class ScreenMain(ctk.CTkFrame):
         # Optionally select the first newly found job
         if new_jobs:
             self._select_job(new_jobs[0].job_id)
+
+    def _clear_job_list(self):
+        """Clear all visible jobs when no job is currently processing."""
+        jobs = self.pipeline_mgr.get_all_jobs()
+        if any(job.status == "processing" for job in jobs):
+            self.log_title_label.configure(text="Logs | Không thể xóa khi còn job đang chạy")
+            return
+
+        for widget in self.job_widgets.values():
+            try:
+                widget.destroy()
+            except Exception:
+                pass
+
+        self.job_widgets.clear()
+        self.selected_job_id = None
+        self.pipeline_mgr.clear_jobs()
+
+        self.log_title_label.configure(text="Logs")
+        self.log_textbox.configure(state="normal")
+        self.log_textbox.delete("1.0", "end")
+        self.log_textbox.configure(state="disabled")
 
     def _refresh_job_list(self):
         """Refresh job status in the UI."""

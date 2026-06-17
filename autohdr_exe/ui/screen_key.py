@@ -7,17 +7,15 @@ and clicks Check. If valid, switches to main screen.
 
 import customtkinter as ctk
 from core.api_client import ApiClient
-from core.cache import cache
-from core.utils import get_hwid
 import webbrowser
 
 
 class ScreenKey(ctk.CTkFrame):
-    def __init__(self, master, app, **kwargs):
+    def __init__(self, master, app, license_status: str = "", **kwargs):
         super().__init__(master, **kwargs)
         self.app = app
         self.api = ApiClient()
-        self.hwid = get_hwid()
+        self.license_status = license_status
 
         # Center content
         self.grid_columnconfigure(0, weight=1)
@@ -29,24 +27,14 @@ class ScreenKey(ctk.CTkFrame):
         # Title
         ctk.CTkLabel(
             center_frame,
-            text="AutoHDR - v3",
+            text="AutoHDR",
             font=("Arial", 28, "bold"),
         ).pack(pady=(0, 30))
-
-        # Machine ID display
-        hwid_frame = ctk.CTkFrame(center_frame, fg_color="transparent")
-        hwid_frame.pack(pady=10)
-
-        ctk.CTkLabel(hwid_frame, text="Mã máy (Machine ID):", font=("Arial", 14)).pack(side="left", padx=5)
-        hwid_entry = ctk.CTkEntry(hwid_frame, width=220, font=("Consolas", 13))
-        hwid_entry.insert(0, self.hwid)
-        hwid_entry.configure(state="readonly")
-        hwid_entry.pack(side="left", padx=5)
 
         # Key input
         ctk.CTkLabel(
             center_frame,
-            text="Nhập Key kích hoạt:",
+            text="Nhập Key kích hoạt",
             font=("Arial", 16, "bold"),
         ).pack(pady=(25, 10))
 
@@ -58,11 +46,6 @@ class ScreenKey(ctk.CTkFrame):
             font=("Arial", 16),
         )
         self.key_entry.pack(pady=5)
-
-        # Load cached key
-        cached_key = cache.get("active_key", "")
-        if cached_key:
-            self.key_entry.insert(0, cached_key)
 
         # Check button
         self.btn_check = ctk.CTkButton(
@@ -85,6 +68,7 @@ class ScreenKey(ctk.CTkFrame):
             text_color="gray",
         )
         self.status_label.pack(pady=5)
+        self._apply_initial_status()
 
         # Footer Link: by tuitenPhở
         footer_label = ctk.CTkLabel(
@@ -97,6 +81,16 @@ class ScreenKey(ctk.CTkFrame):
         footer_label.place(relx=0.98, rely=0.97, anchor="se")
         footer_label.bind("<Button-1>", lambda e: webbrowser.open("https://www.facebook.com/ndinhnguyende/"))
 
+    def _apply_initial_status(self):
+        """Display the reason the user was routed to the key screen."""
+        if self.license_status == "expired":
+            self.status_label.configure(text="Key đã hết hạn, vui lòng nhập lại.", text_color="#F59E0B")
+        elif self.license_status in {"invalid", "machine_mismatch"}:
+            self.status_label.configure(
+                text="Key không hợp lệ, hết hạn hoặc đã dùng trên máy khác",
+                text_color="#EF4444",
+            )
+
     def check_key(self):
         key = self.key_entry.get().strip()
         if not key:
@@ -108,17 +102,22 @@ class ScreenKey(ctk.CTkFrame):
         self.update()
 
         try:
-            is_valid = self.api.check_key(key, self.hwid)
+            is_valid = self.api.check_key(key)
             if is_valid:
                 self.status_label.configure(text="Kích hoạt thành công!", text_color="#22C55E")
-                cache.set("active_key", key)
                 self.update()
                 self.after(800, lambda: self.app.show_main_screen())
             else:
-                self.status_label.configure(
-                    text="Key không hợp lệ, hết hạn hoặc đã dùng trên máy khác",
-                    text_color="#EF4444",
-                )
+                status = self.api.last_check_status
+                if status == "expired":
+                    self.status_label.configure(text="Key đã hết hạn, vui lòng nhập lại.", text_color="#F59E0B")
+                elif status == "network_error":
+                    self.status_label.configure(text="Không thể kết nối.", text_color="#EF4444")
+                else:
+                    self.status_label.configure(
+                        text="Key không hợp lệ, hết hạn hoặc đã dùng trên máy khác",
+                        text_color="#EF4444",
+                    )
                 self.btn_check.configure(state="normal", text="Kiểm Tra & Kích Hoạt")
         except Exception as e:
             self.status_label.configure(text=f"Lỗi: {str(e)}", text_color="#EF4444")
