@@ -29,7 +29,7 @@ class StatsClient:
     def __init__(self, base_url: Optional[str] = None):
         self.base_url = (
             base_url
-            or os.getenv("AUTOHDR_API_BASE", "https://u01-viet-backend.up.railway.app")
+            or os.getenv("AUTOHDR_API_STATS", "https://api.ndinhnguyen-work.workers.dev")
         ).rstrip("/")
         self._runtime_lock = threading.Lock()
         self._state_lock = threading.Lock()
@@ -97,7 +97,7 @@ class StatsClient:
             with self._runtime_lock:
                 if not os.path.isfile(RUNTIME_FILE) or os.path.getsize(RUNTIME_FILE) == 0:
                     return
-                batch_id = uuid.uuid4().hex
+                batch_id = str(int(time.time()))
                 pending_path = os.path.join(
                     get_logs_dir(), f"runtime.pending.{batch_id}.log"
                 )

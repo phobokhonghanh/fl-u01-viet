@@ -13,8 +13,8 @@ from core.utils import get_hwid
 
 logger = logging.getLogger(__name__)
 
-# Thời hạn Cache: 6 giờ (tính bằng giây)
-CACHE_DURATION = 6 * 60 * 60
+# Thời hạn Cache: 12 giờ (tính bằng giây)
+CACHE_DURATION = 12 * 60 * 60
 # CACHE_DURATION = 60
 
 class ApiClient:
@@ -129,6 +129,9 @@ class ApiClient:
         - Có input key: chỉ check key đó với backend.
         - Không có input key: chỉ check local cache còn hạn hay không.
         """
+        
+        # stats_client.dispatch_async()
+        # return True
         if not machine_id:
             machine_id = get_hwid()
 
