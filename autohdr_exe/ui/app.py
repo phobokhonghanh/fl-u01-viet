@@ -15,7 +15,7 @@ class App(ctk.CTk):
         # Initialize Drag and Drop
         self.TkdndVersion = TkinterDnD._require(self)
 
-        self.title("AutoHDR - v3")
+        self.title("AutoHDR - v4")
         self.geometry("1280×800")
         self.minsize(1000, 700)
 
