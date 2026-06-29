@@ -77,6 +77,7 @@ def fotello_upload_and_enhance(
     preferences: dict[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
     count_fn=None,
+    max_brackets_per_listing: int = 30,
 ) -> list[str]:
     log = log or noop_log
     progress_fn = progress_fn or (lambda cur, total: None)
@@ -142,55 +143,74 @@ def fotello_upload_and_enhance(
     if is_cancelled():
         return []
 
-    # log(f"Đang tạo listing...", "info")
-    log("Step 04: Tạo listing trên Fotello.", "info")
-    listing_result = api_post(
-        EP_CREATE_LISTING,
-        {
-            "name": listing_name,
-            "num_total_brackets": len(brackets),
-            "filenames": [p.name for p in images],
-            "isDemoListing": False,
-            "teamId": team_id,
-        },
-        id_token,
-    )
-    listing_id = listing_result["id"]
-    log(f"Step 05: Tạo listing thành công - {listing_id[:8]} / {len(brackets)} HDR brackets.", "success")
-
-    # log(f"Kích hoạt xử lý enhance và patch watermark...", "info")
-    log("Step 06: Kích hoạt xử lý.", "info")
+    # Split brackets into chunks of at most max_brackets_per_listing brackets
+    bracket_chunks = [brackets[i : i + max_brackets_per_listing] for i in range(0, len(brackets), max_brackets_per_listing)]
+    
     enhance_ids: list[str] = []
-    for bracket in brackets:
+    listing_ids: list[str] = []
+    
+    log(f"Chia làm {len(bracket_chunks)} đợt xử lý (Tối đa {max_brackets_per_listing} brackets/đợt)...", "info")
+    
+    for chunk_idx, chunk in enumerate(bracket_chunks, 1):
         if is_cancelled():
             return []
-        upload_ids = [uploaded[p] for p in bracket if p in uploaded]
-        if not upload_ids:
-            continue
-        enhance_result = api_post(
-            EP_CREATE_ENHANCE,
+            
+        # Get all images belonging to this chunk
+        chunk_images = [img for bracket in chunk for img in bracket]
+        
+        # Format naming: [Part X] - [prefix] - [datetime] if multiple parts, else keep original
+        if len(bracket_chunks) > 1:
+            chunk_listing_name = f"[Part {chunk_idx}] - {listing_prefix} - {time.strftime('%d %m, %Y %H:%M')}"
+        else:
+            chunk_listing_name = f"{listing_prefix} - {time.strftime('%d %m, %Y %H:%M')}"
+            
+        log(f"Step 04: Tạo listing đợt {chunk_idx}/{len(bracket_chunks)}: {chunk_listing_name}", "info")
+        listing_result = api_post(
+            EP_CREATE_LISTING,
             {
-                "upload_ids": upload_ids,
-                "listing_id": listing_id,
-                "preferences": preferences,
+                "name": chunk_listing_name,
+                "num_total_brackets": len(chunk),
+                "filenames": [p.name for p in chunk_images],
+                "isDemoListing": False,
                 "teamId": team_id,
             },
             id_token,
         )
-        enhance_id = enhance_result.get("id")
-        if enhance_id:
-            enhance_ids.append(enhance_id)
-            firestore_patch(
-                f"{FLD_ENHANCES}/{enhance_id}",
-                {FLD_IS_WM: {FLD_BV: False}},
-                access_token,
-                [FLD_IS_WM],
-                log=log,
+        chunk_listing_id = listing_result["id"]
+        listing_ids.append(chunk_listing_id)
+        log(f"Step 05: Tạo listing đợt {chunk_idx} thành công - {chunk_listing_id[:8]} / {len(chunk)} brackets.", "success")
+        
+        log(f"Step 06: Kích hoạt xử lý đợt {chunk_idx}...", "info")
+        for bracket in chunk:
+            if is_cancelled():
+                return []
+            upload_ids = [uploaded[p] for p in bracket if p in uploaded]
+            if not upload_ids:
+                continue
+            enhance_result = api_post(
+                EP_CREATE_ENHANCE,
+                {
+                    "upload_ids": upload_ids,
+                    "listing_id": chunk_listing_id,
+                    "preferences": preferences,
+                    "teamId": team_id,
+                },
+                id_token,
             )
-            names = ", ".join(p.name for p in bracket)
-            log(f"Step 06: [{names}]", "success")
-        done += 1
-        progress_fn(done, total_work)
+            enhance_id = enhance_result.get("id")
+            if enhance_id:
+                enhance_ids.append(enhance_id)
+                firestore_patch(
+                    f"{FLD_ENHANCES}/{enhance_id}",
+                    {FLD_IS_WM: {FLD_BV: False}},
+                    access_token,
+                    [FLD_IS_WM],
+                    log=log,
+                )
+                names = ", ".join(p.name for p in bracket)
+                log(f"Step 06: [{names}]", "success")
+            done += 1
+            progress_fn(done, total_work)
 
     count_download = 0
     poll_timeout = max(30.0, float(_setting_number(settings, "poll_timeout", POLL_TIMEOUT)))
@@ -231,14 +251,26 @@ def fotello_upload_and_enhance(
         elif ready_count:
             log(f"Step 08: Trạng thái kiểm tra - ready={count_download}/{len(enhance_ids)}.", "success")
 
-    downloaded = fotello_download_listing(listing_id=listing_id, output_dir=str(output_dir), log=log, is_cancelled=is_cancelled)
-    total_downloaded = len(downloaded)
+    total_downloaded = 0
+    downloaded_files = []
+    for chunk_idx, l_id in enumerate(listing_ids, 1):
+        if is_cancelled():
+            break
+        log(f"Đang tải kết quả của listing đợt {chunk_idx}/{len(listing_ids)} (ID: {l_id[:8]})...", "info")
+        try:
+            downloaded = fotello_download_listing(listing_id=l_id, output_dir=str(output_dir), log=log, is_cancelled=is_cancelled)
+            downloaded_files.extend(downloaded)
+        except Exception as exc:
+            log(f"Không thể tải listing đợt {chunk_idx}: {exc}", "error")
+            print_system_exception(f"service.fotello_upload_and_enhance download listing={l_id}", exc)
+            
+    total_downloaded = len(downloaded_files)
     count_fn(downloaded=total_downloaded)
     if total_downloaded >= count_download:
         log(f"Hoàn tất với {total_downloaded} ảnh được tải về.", "info")
     else :
-        error_count = len(failed_items)
-        if  error_count > 0:
+        error_count = len(enhance_ids) - total_downloaded
+        if error_count > 0:
             log(f"Lỗi {error_count}/{len(enhance_ids)} mục.", "error")
 
     return total_downloaded
