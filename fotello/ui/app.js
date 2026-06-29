@@ -427,7 +427,7 @@ async function fotelloStartDownload() {
     const api = requireApi();
     if (!api) return;
     const selected = selectedListings();
-    const savedir = qs('fotello-savedir').value.trim();
+    const savedir = qs('fotello-upload-savedir').value.trim();
     if (!selected.length) {
         addLog('Chưa chọn listing nào', 'warn');
         return;
