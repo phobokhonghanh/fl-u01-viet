@@ -219,7 +219,7 @@ def fotello_upload_and_enhance(
     failed_items: set[str] = set()
     poll_attempt = 0
 
-    log("Step 08: Kiểm tra trạng thái ảnh...", "info")
+    log("Step 07: Kiểm tra trạng thái ảnh...", "info")
     while pending and time.time() < deadline and not is_cancelled():
         poll_attempt += 1
         ready_count = 0
@@ -243,13 +243,13 @@ def fotello_upload_and_enhance(
         if pending:
             interval = _next_poll_interval(settings, poll_attempt, ready_count)
             log(
-                f"Step 08: Kiểm tra lần {poll_attempt} - ready={ready_count}/{len(enhance_ids)}, "
+                f"Step 07: Kiểm tra lần {poll_attempt} - ready={ready_count}/{len(enhance_ids)}, "
                 f"pending={len(pending)}, chờ {int(interval)}s.",
                 "info",
             )
             _poll_sleep(interval, is_cancelled)
         elif ready_count:
-            log(f"Step 08: Trạng thái kiểm tra - ready={count_download}/{len(enhance_ids)}.", "success")
+            log(f"Step 07: Trạng thái kiểm tra - ready={count_download}/{len(enhance_ids)}.", "success")
 
     total_downloaded = 0
     downloaded_files = []
@@ -258,7 +258,7 @@ def fotello_upload_and_enhance(
             break
         log(f"Đang tải kết quả của listing đợt {chunk_idx}/{len(listing_ids)} (ID: {l_id[:8]})...", "info")
         try:
-            downloaded = fotello_download_listing(listing_id=l_id, output_dir=str(output_dir), log=log, is_cancelled=is_cancelled)
+            downloaded = fotello_download_listing(enhance_ids=enhance_ids,listing_id=l_id, output_dir=str(output_dir), log=log, is_cancelled=is_cancelled)
             downloaded_files.extend(downloaded)
         except Exception as exc:
             log(f"Không thể tải listing đợt {chunk_idx}: {exc}", "error")

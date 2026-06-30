@@ -241,14 +241,17 @@ def check_download_single_enhance(
 
     doc = firestore_get(f"{FLD_ENHANCES}/{enhance_id}", access_token)
     fields = doc.get("fields", {})
-    candidates = ("mergedImageUpsized", FLD_EDITED_UPSIZED, "mergedImage", FLD_EDITED, "outputImage")
-    gs_uri = ""
-    for key in candidates:
-        gs_uri = fields.get(key, {}).get(FLD_SV, "")
-        if gs_uri:
-            break
-    if not gs_uri:
-       return False
+    status = fields.get('status', {}).get('stringValue', "")
+    if status != 'enhance_success':
+        return False
+    # candidates = ("mergedImageUpsized", FLD_EDITED_UPSIZED, "mergedImage", FLD_EDITED, "outputImage")
+    # gs_uri = ""
+    # for key in candidates:
+    #     gs_uri = fields.get(key, {}).get(FLD_SV, "")
+    #     if gs_uri:
+    #         break
+    # if not gs_uri:
+    #    return False
     return True
 
 
@@ -257,9 +260,11 @@ def fotello_download_listing(
     output_dir: str | Path,
     log: LogFn = None,
     is_cancelled=None,
+    enhance_ids: list[str] = None,
 ) -> list[str]:
     log = log or noop_log
     is_cancelled = is_cancelled or (lambda: False)
+    
     if not FOTELLO_STATE.get("connected"):
         raise RuntimeError("Chưa kết nối Fotello")
 
@@ -272,19 +277,24 @@ def fotello_download_listing(
     out_dir = Path(output_dir)
     log(f"Step 02: Tạo thư mục output: {out_dir}", "info")
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    log(f"Step 03: Kiểm tra thông tin listing={listing_id}", "info")
-    enhances = fotello_list_enhances_for_listing(listing_id, log)
-    successful = [e for e in enhances if e["has_image"]]
-    log(f"Step 03: Tìm thấy {len(successful)} enhances có ảnh.", "info")
+    
+    if enhance_ids is None:
+        log(f"Step 03: Kiểm tra thông tin listing={listing_id}", "info")
+        enhances = fotello_list_enhances_for_listing(listing_id, log)
+        successful = [e['id'] for e in enhances if e["has_image"]]
+        log(f"Step 03: Tìm thấy {len(successful)} enhances có ảnh.", "info")
+    else:
+        successful = enhance_ids
+        
+    if not successful:
+        raise RuntimeError("Không tìm thấy enhances có ảnh")
 
     for enh in successful:
         if is_cancelled():
             return []
-        # log(f"[DL-04] Patch watermark enhance={enh['id']}", "info")
-        log(f"Step 04: Xử lý ảnh watermark: enhance={enh['id']}", "info")
+        log(f"Step 04: Xử lý ảnh watermark: enhance={enh}", "info")
         firestore_patch(
-            f"{FLD_ENHANCES}/{enh['id']}",
+            f"{FLD_ENHANCES}/{enh}",
             {FLD_IS_WM: {FLD_BV: False}},
             access_token,
             [FLD_IS_WM],
@@ -297,12 +307,12 @@ def fotello_download_listing(
         download_url = zip_resp.get("download_url") or zip_resp.get("url")
         if download_url:
             # log(f"[DL-06] Tải ZIP URL: {download_url}", "info")
-            log(f"Step 06: Bắt đầu tải gói dữ liệu. listing={listing_id}", "info")
+            log(f"Step 05: Bắt đầu tải gói dữ liệu. listing={listing_id}", "info")
             req = urllib.request.Request(str(download_url))
             with open_checked(req, 120) as resp:
                 zip_data = resp.read()
             # log("[DL-07] Extract từng file ZIP", "info")
-            log("Step 07: Giải nén dữ liệu đã tải.", "info")
+            log("Step 06: Giải nén dữ liệu đã tải.", "info")
             with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
                 for idx, fname in enumerate(sorted(zf.namelist()), 1):
                     if is_cancelled():
@@ -318,12 +328,12 @@ def fotello_download_listing(
     except Exception as exc:
         print_system_exception(f"downloads.fotello_download_listing ZIP listing_id={listing_id}", exc)
         # log(f"ZIP download lỗi, fallback từng ảnh: {exc}", "warn")
-        log("Step 08: Chuyển sang chế độ tải dự phòng.", "warn")
+        log("Chuyển sang chế độ tải dự phòng.", "warn")
 
     # log("[DL-08] Fallback tải từng enhance", "warn")
-    log("Step 08: Tải dự phòng theo từng mục.", "warn")
+    log("Step 07: Tải dự phòng theo từng mục.", "warn")
     for enh in successful:
-        path = download_single_enhance(str(enh["id"]), access_token, out_dir, log=log, is_cancelled=is_cancelled)
+        path = download_single_enhance(str(enh), access_token, out_dir, log=log, is_cancelled=is_cancelled)
         if path:
             results.append(str(path))
     return results
