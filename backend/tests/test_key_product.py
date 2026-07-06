@@ -81,3 +81,14 @@ def test_import_defaults_missing_product_and_skips_invalid(monkeypatch):
     ]
     assert saved[-1] == [record.to_dict() for record in records]
 
+
+def test_reset_key_machine(monkeypatch):
+    records = [KeyRecord(key="TESTKEY", name="test_user", machine_id="old_machine", product="autohdr")]
+    _patch_storage(monkeypatch, records)
+
+    updated_record = key_manager.reset_key_machine("keys.json", "test_user")
+    assert updated_record is not None
+    assert updated_record.machine_id is None
+    assert records[0].machine_id is None
+
+

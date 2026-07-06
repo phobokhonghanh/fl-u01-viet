@@ -177,3 +177,53 @@ def test_admin_delete_key_sends_notification(monkeypatch):
     assert "License Key DELETED" in called_messages[0]
     assert "delete_test" in called_messages[0]
     assert "autohdr" in called_messages[0]
+
+
+def test_admin_reset_key_sends_notification(monkeypatch):
+    fake_settings = Settings(
+        pass_admin="vietkey",
+        keys_filename="test_keys.json",
+        telegram_bot_token="fake_token",
+        telegram_chat_id="fake_chat_id",
+    )
+    monkeypatch.setattr(Settings, "from_env", lambda *args, **kwargs: fake_settings)
+
+    # Mock Key storage functions containing an existing key with machine_id
+    existing_key = KeyRecord(key="RESETME123", name="reset_test", machine_id="old_machine_id", product="autohdr")
+    records = [existing_key]
+    def fake_load_keys(_s3_key):
+        return records
+    def fake_save_keys(_s3_key, updated_records):
+        nonlocal records
+        records[:] = updated_records
+
+    monkeypatch.setattr(key_manager, "load_keys", fake_load_keys)
+    monkeypatch.setattr(key_manager, "save_keys", fake_save_keys)
+
+    # Track calls to send_telegram_notification
+    called_messages = []
+    async def mock_send_telegram_notification(msg: str):
+        called_messages.append(msg)
+        return True
+
+    monkeypatch.setattr("routers.keys.send_telegram_notification", mock_send_telegram_notification)
+
+    # Request to reset key
+    response = client.post(
+        "/api/admin/keys/reset",
+        json={
+            "key": "reset_test",
+            "password": "vietkey",
+        }
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    
+    # Assert machine_id cleared from storage
+    assert records[0].machine_id is None
+
+    # Assert notification was triggered
+    assert len(called_messages) == 1
+    assert "License Key RESET" in called_messages[0]
+    assert "reset_test" in called_messages[0]
+    assert "Machine ID Cleared" in called_messages[0]

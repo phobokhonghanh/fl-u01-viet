@@ -43,6 +43,11 @@ class AdminKeyDeleteRequest(BaseModel):
     key: str
 
 
+class AdminKeyResetRequest(BaseModel):
+    password: str
+    key: str
+
+
 class AdminKeyExportRequest(BaseModel):
     password: str
 
@@ -137,6 +142,28 @@ async def admin_delete_key(req: AdminKeyDeleteRequest, background_tasks: Backgro
         background_tasks.add_task(send_telegram_notification, msg)
         return {"status": "ok", "message": "Key deleted successfully"}
     raise HTTPException(status_code=404, detail="Key not found")
+
+
+@router.post("/admin/keys/reset")
+async def admin_reset_key(req: AdminKeyResetRequest, background_tasks: BackgroundTasks):
+    """Reset the machine_id of a key (Admin only)."""
+    settings = Settings.from_env()
+    _check_admin(req.password, settings)
+
+    record = key_manager.reset_key_machine(settings.keys_filename, req.key)
+    if not record:
+        raise HTTPException(status_code=404, detail="Key not found")
+
+    # Notify telegram in the background
+    msg = (
+        f"🔄 <b>License Key RESET</b>\n"
+        f"• <b>Name</b>: <code>{record.name}</code>\n"
+        f"• <b>Product</b>: <code>{record.product}</code>\n"
+        f"• <b>Status</b>: <code>Machine ID Cleared</code>"
+    )
+    background_tasks.add_task(send_telegram_notification, msg)
+
+    return {"status": "ok", "record": record.to_dict()}
 
 
 @router.post("/admin/keys/import")
