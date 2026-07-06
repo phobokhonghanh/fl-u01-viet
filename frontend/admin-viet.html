@@ -11,114 +11,180 @@
 <body>
   <div id="admin-app" class="container">
     <header>
-      <h1>Admin<span class="version">KEY</span></h1>
+      <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1000px; margin: 0 auto 1.5rem;">
+        <h1 style="margin: 0; text-align: left;">Admin<span class="version">KEY</span></h1>
+        <button id="btn-lock-session" class="btn-lock" title="Khóa/Đổi mật khẩu">
+          <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+          </svg>
+        </button>
+      </div>
     </header>
 
-    <div class="split-layout">
-      <!-- Cột bên trái: Form tạo Key -->
-      <div class="split-left">
-        <div class="card">
-          <h3>Tạo License Key</h3>
-          <form id="key-form">
-            <div class="form-group">
-              <label for="admin-pass">Mật khẩu</label>
-              <input type="password" id="admin-pass" placeholder="Nhập mật khẩu..." required />
-            </div>
-
-            <div class="form-divider">Chi tiết Key</div>
-
-            <div class="form-group">
-              <label for="key-name">Tên</label>
-              <input type="text" id="key-name" placeholder="Ví dụ: Nguyen_Vancouver" required />
-            </div>
-
-            <div class="form-group">
-              <label for="key-product">Ứng dụng</label>
-              <select id="key-product" required>
-                <option value="autohdr">AutoHDR</option>
-                <option value="fotello">Fotello</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>Thời hạn sử dụng</label>
-              <div style="display: flex; gap: 1.5rem; margin-top: 0.5rem; align-items: center;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                  <input type="radio" name="expiry" value="days" checked>
-                  <input type="number" id="expiry-days-input" value="30" min="1" max="9999"
-                    style="width: 70px; padding: 0.3rem;" /> Ngày
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                  <input type="radio" name="expiry" value="forever"> Vĩnh viễn
-                </label>
-              </div>
-            </div>
-
-            <button type="submit" id="btn-create" class="btn-primary">Tạo</button>
-          </form>
-
-          <div id="new-key-result"
-            style="display: none; margin-top: 1.5rem; padding: 1rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
-            <p style="color: #166534; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">Key đã được tạo thành
-              công:</p>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <code id="display-key"
-                style="flex: 1; background: #fff; padding: 0.5rem; border-radius: 4px; border: 1px solid #bbf7d0; font-family: monospace; font-weight: 700; font-size: 1.1rem; color: #15803d;"></code>
-              <button id="btn-copy" class="btn-clear" style="padding: 0.6rem;">Copy</button>
-            </div>
+    <div style="max-width: 1000px; margin: 0 auto;">
+      <!-- Bảng điều khiển chính -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; gap: 0.5rem; flex-wrap: wrap;">
+          <h3 style="margin: 0;">Danh sách Keys</h3>
+          <div class="header-actions">
+            <button id="btn-open-create-modal" class="btn-primary" style="padding: 0.45rem 0.9rem; width: auto; font-size: 0.82rem;">+ Tạo Key Mới</button>
+            <button id="btn-export" class="btn-clear" style="padding: 0.45rem 0.9rem; border: 1px solid var(--border); font-size: 0.82rem;">Export JSON</button>
+            <label for="import-file" class="btn-clear" style="cursor: pointer; padding: 0.45rem 0.9rem; border: 1px solid var(--border); margin: 0; font-size: 0.82rem;">Import JSON</label>
+            <input type="file" id="import-file" accept=".json" style="display: none;" />
+            <button id="btn-list" class="btn-clear" style="padding: 0.45rem 0.9rem; background: var(--primary); color: #fff; font-size: 0.82rem;">Làm mới</button>
           </div>
         </div>
-      </div>
 
-      <!-- Cột bên phải: Danh sách Key -->
-      <div class="split-right">
-        <div class="card">
-          <div
-            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 0.5rem;">
-            <h3>Danh sách Keys</h3>
-            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-              <button id="btn-export" class="btn-clear"
-                style="padding: 0.4rem 0.8rem; border: 1px solid var(--border);">Export JSON</button>
-              <label for="import-file" class="btn-clear"
-                style="cursor: pointer; padding: 0.4rem 0.8rem; border: 1px solid var(--border); margin: 0;">Import
-                JSON</label>
-              <input type="file" id="import-file" accept=".json" style="display: none;" />
-              <button id="btn-list" class="btn-primary" style="padding: 0.4rem 0.8rem;">Làm mới</button>
-            </div>
+        <!-- Thanh tìm kiếm & filter (Client-side) -->
+        <div class="toolbar-controls">
+          <div class="search-input-wrapper">
+            <input type="text" id="search-name-input" placeholder="Tìm kiếm theo tên key hoặc mã key..." style="padding-left: 0.75rem;" />
           </div>
+          <select id="filter-product-select" class="filter-select">
+            <option value="all">Tất cả ứng dụng</option>
+            <option value="autohdr">AutoHDR</option>
+            <option value="fotello">Fotello</option>
+          </select>
+          <select id="filter-status-select" class="filter-select">
+            <option value="all">Tất cả trạng thái</option>
+            <option value="active">Còn hạn</option>
+            <option value="expired">Hết hạn</option>
+          </select>
+        </div>
 
-          <div id="keys-table-container" style="overflow-x: auto;">
-            <table id="keys-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
-              <thead>
-                <tr style="text-align: left; border-bottom: 2px solid var(--border);">
-                  <th style="padding: 0.5rem;">Tên</th>
-                  <th style="padding: 0.5rem;">Key</th>
-                  <th style="padding: 0.5rem;">Ứng dụng</th>
-                  <th style="padding: 0.5rem;">Hạn dùng</th>
-                  <th style="padding: 0.5rem;">Máy khóa</th>
-                  <th style="padding: 0.5rem; text-align: center;">Hành động</th>
-                </tr>
-              </thead>
-              <tbody id="keys-body">
-                <!-- Dữ liệu sẽ được chèn vào đây -->
-                <tr>
-                  <td colspan="6" data-empty="true" style="text-align: center; padding: 2rem; color: var(--text-light);">
-                    Nhập mật khẩu bên trái và bấm "Làm mới" để xem danh sách.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        <div id="keys-table-container" style="overflow-x: auto;">
+          <table id="keys-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+            <thead>
+              <tr style="text-align: left; border-bottom: 2px solid var(--border);">
+                <th style="padding: 0.6rem 0.5rem;">Tên</th>
+                <th style="padding: 0.6rem 0.5rem;">Key</th>
+                <th style="padding: 0.6rem 0.5rem;">Ứng dụng</th>
+                <th style="padding: 0.6rem 0.5rem;">Hạn dùng</th>
+                <th style="padding: 0.6rem 0.5rem;">Máy khóa</th>
+                <th style="padding: 0.6rem 0.5rem; text-align: center;">Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="keys-body">
+              <tr>
+                <td colspan="6" data-empty="true" style="text-align: center; padding: 2.5rem; color: var(--text-light);">
+                  Nhấp vào "Làm mới" để tải danh sách key.
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
-    <footer class="admin-footer-nav">
+    <footer class="admin-footer-nav" style="max-width: 1000px; margin: 1.5rem auto 0;">
       <span>Điều hướng nhanh:</span>
       <a href="/admin-viet.html" class="is-active" aria-current="page">Admin Key</a>
       <a href="/admin-payment.html">Admin Payment</a>
       <a class="admin-footer-credit" href="https://www.facebook.com/ndinhnguyende/">© 2026 Nguyen Dinh Nguyen - Development & Maintenance Solutions. All rights reserved.</a>
     </footer>
+  </div>
+
+  <!-- POPUP 1: MẬT KHẨU ADMIN -->
+  <div id="password-modal" class="modal-overlay">
+    <div class="modal-container" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3>Xác thực Quản trị viên</h3>
+      </div>
+      <form id="password-form">
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label for="admin-pass">Mật khẩu admin</label>
+          <input type="password" id="admin-pass" placeholder="Nhập mật khẩu..." required />
+        </div>
+        <button type="submit" class="btn-primary">Đăng nhập</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- POPUP 2: TẠO KEY MỚI -->
+  <div id="create-key-modal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3>Tạo License Key Mới</h3>
+        <button type="button" class="modal-close" id="btn-close-create-modal">&times;</button>
+      </div>
+      <form id="key-form">
+        <div class="form-group">
+          <label for="key-name">Tên</label>
+          <input type="text" id="key-name" placeholder="Ví dụ: Nguyen_Vancouver" required />
+        </div>
+
+        <div class="form-group">
+          <label for="key-product">Ứng dụng</label>
+          <select id="key-product" required>
+            <option value="autohdr">AutoHDR</option>
+            <option value="fotello">Fotello</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Thời hạn sử dụng</label>
+          <div style="display: flex; gap: 1.5rem; margin-top: 0.5rem; align-items: center;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="radio" name="expiry" value="days" checked>
+              <input type="number" id="expiry-days-input" value="30" min="1" max="9999"
+                style="width: 70px; padding: 0.3rem;" /> Ngày
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="radio" name="expiry" value="forever"> Vĩnh viễn
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-create" class="btn-primary" style="margin-top: 0.5rem;">Tạo Key</button>
+      </form>
+
+      <div id="new-key-result"
+        style="display: none; margin-top: 1.25rem; padding: 1rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+        <p style="color: #166534; font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem;">Key đã được tạo thành công:</p>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <code id="display-key"
+            style="flex: 1; background: #fff; padding: 0.5rem; border-radius: 4px; border: 1px solid #bbf7d0; font-family: monospace; font-weight: 700; font-size: 1.1rem; color: #15803d; word-break: break-all;"></code>
+          <button id="btn-copy" class="btn-clear" style="padding: 0.6rem; font-size: 0.75rem;">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP 3: GIA HẠN KEY -->
+  <div id="extend-key-modal" class="modal-overlay">
+    <div class="modal-container" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3>Gia hạn License Key</h3>
+        <button type="button" class="modal-close" id="btn-close-extend-modal">&times;</button>
+      </div>
+      <form id="extend-key-form">
+        <input type="hidden" id="extend-key-name" />
+        <input type="hidden" id="extend-key-product" />
+        
+        <div class="form-group" style="background: var(--bg); padding: 0.75rem; border-radius: 8px; margin-bottom: 1.25rem;">
+          <p style="font-size: 0.85rem; margin: 0; color: var(--text-light); line-height: 1.6;">
+            Đang gia hạn cho: <strong id="extend-display-name" style="color: var(--text);">Nguyen_Vancouver</strong><br/>
+            Ứng dụng: <span id="extend-display-product" style="font-weight: 600; color: var(--primary);">AutoHDR</span>
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label>Thời gian gia hạn thêm</label>
+          <div style="display: flex; gap: 1.5rem; margin-top: 0.5rem; align-items: center;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="radio" name="extend-expiry" value="days" checked>
+              <input type="number" id="extend-days-input" value="30" min="1" max="9999"
+                style="width: 70px; padding: 0.3rem;" /> Ngày
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="radio" name="extend-expiry" value="forever"> Vĩnh viễn
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-extend-submit" class="btn-primary" style="margin-top: 0.5rem;">Xác nhận Gia hạn</button>
+      </form>
+    </div>
   </div>
 
   <script type="module" src="/src/admin.js"></script>
