@@ -34,6 +34,11 @@ class Settings:
     # URL frontend để build success/error/cancel callback URL
     frontend_base_url: str = "http://localhost:3000"
 
+    # Telegram Notification Settings
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+    telegram_thread_id: Optional[int] = None
+
     @classmethod
     def from_env(cls, env_path: Optional[str] = None) -> "Settings":
         load_dotenv(dotenv_path=env_path)
@@ -59,4 +64,7 @@ class Settings:
             sepay_env=get_env("SEPAY_ENV", "sandbox"),
             sepay_ipn_secret_key=get_env("SEPAY_IPN_SECRET_KEY"),
             frontend_base_url=get_env("FRONTEND_BASE_URL", "http://localhost:3000"),
+            telegram_bot_token=get_env("TELEGRAM_BOT_TOKEN"),
+            telegram_chat_id=get_env("TELEGRAM_CHAT_ID"),
+            telegram_thread_id=int(get_env("TELEGRAM_THREAD_ID")) if get_env("TELEGRAM_THREAD_ID") else None,
         )

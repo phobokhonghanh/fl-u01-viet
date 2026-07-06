@@ -7,11 +7,12 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Response
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Response, BackgroundTasks
 from pydantic import BaseModel
 
 from config.settings import Settings
 from core import key_manager
+from core.telegram import send_telegram_notification
 from models.schemas import DEFAULT_KEY_PRODUCT, is_valid_key_product, normalize_key_product
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ async def admin_list_keys(req: AdminKeyListRequest):
 
 
 @router.post("/admin/keys/add")
-async def admin_add_key(req: AdminKeyAddRequest):
+async def admin_add_key(req: AdminKeyAddRequest, background_tasks: BackgroundTasks):
     """Add or update a key (Admin only)."""
     settings = Settings.from_env()
     _check_admin(req.password, settings)
@@ -89,17 +90,51 @@ async def admin_add_key(req: AdminKeyAddRequest):
         raise HTTPException(status_code=400, detail="Invalid product")
 
     record, status = key_manager.add_or_update_key_by_name(settings.keys_filename, req.name, expiry, product)
+
+    # Notify telegram in the background
+    action_str = "CREATED" if status == "new" else ("UPDATED" if status == "updated" else "EXISTS")
+    status_emoji = "🔑" if status == "new" else ("🔄" if status == "updated" else "ℹ️")
+
+    msg = (
+        f"{status_emoji} <b>License Key {action_str}</b>\n"
+        f"• <b>Name</b>: <code>{record.name}</code>\n"
+        f"• <b>Product</b>: <code>{record.product}</code>\n"
+        f"• <b>Expiry</b>: <code>{record.expires_at or 'Forever'}</code>"
+    )
+    background_tasks.add_task(send_telegram_notification, msg)
+
     return {"status": status, "record": record.to_dict()}
 
 
 @router.post("/admin/keys/delete")
-async def admin_delete_key(req: AdminKeyDeleteRequest):
+async def admin_delete_key(req: AdminKeyDeleteRequest, background_tasks: BackgroundTasks):
     """Delete a key (Admin only)."""
     settings = Settings.from_env()
     _check_admin(req.password, settings)
 
+    # Load keys to find the one we are about to delete for the telegram notification
+    keys = key_manager.load_keys(settings.keys_filename)
+    deleted_record = None
+    for k in keys:
+        if k.key == req.key or k.name == req.key:
+            deleted_record = k
+            break
+
     success = key_manager.delete_key(settings.keys_filename, req.key)
     if success:
+        if deleted_record:
+            msg = (
+                f"🗑️ <b>License Key DELETED</b>\n"
+                f"• <b>Name</b>: <code>{deleted_record.name}</code>\n"
+                f"• <b>Product</b>: <code>{deleted_record.product}</code>\n"
+                f"• <b>Expiry</b>: <code>{deleted_record.expires_at or 'Forever'}</code>"
+            )
+        else:
+            msg = (
+                f"🗑️ <b>License Key DELETED</b>\n"
+                f"• <b>Identifier</b>: <code>{req.key}</code>"
+            )
+        background_tasks.add_task(send_telegram_notification, msg)
         return {"status": "ok", "message": "Key deleted successfully"}
     raise HTTPException(status_code=404, detail="Key not found")
 
