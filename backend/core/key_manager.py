@@ -131,6 +131,16 @@ def delete_key(s3_key: str, key_to_delete: str) -> bool:
         return True
     return False
 
+def reset_key_machine(s3_key: str, key_or_name: str) -> Optional[KeyRecord]:
+    """Reset the machine_id of a key by name or key value to None."""
+    records = load_keys(s3_key)
+    for record in records:
+        if record.key == key_or_name or record.name == key_or_name:
+            record.machine_id = None
+            save_keys(s3_key, records)
+            return record
+    return None
+
 def import_keys(s3_key: str, new_keys_data: list) -> int:
     """Import valid keys from JSON array."""
     records = load_keys(s3_key)
