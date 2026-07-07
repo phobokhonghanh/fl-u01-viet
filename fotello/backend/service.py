@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -68,6 +69,10 @@ def _poll_sleep(seconds: float, is_cancelled) -> None:
         time.sleep(min(1.0, deadline - time.time()))
 
 
+def _natural_sort_key(path: Path) -> list[int | str]:
+    return [int(text) if text.isdigit() else text.casefold() for text in re.split(r'(\d+)', path.name)]
+
+
 def fotello_upload_and_enhance(
     input_dir: str,
     output_dir: str,
@@ -96,7 +101,10 @@ def fotello_upload_and_enhance(
     input_path = Path(input_dir)
     if not input_path.exists() or not input_path.is_dir():
         raise RuntimeError(f"Thư mục đầu vào không hợp lệ: {input_dir}")
-    images = sorted(p for p in input_path.iterdir() if p.suffix.lower() in IMAGE_EXTENSIONS)
+    images = sorted(
+        (p for p in input_path.iterdir() if p.suffix.lower() in IMAGE_EXTENSIONS),
+        key=_natural_sort_key
+    )
     if not images:
         raise RuntimeError(f"Không tìm thấy ảnh hợp lệ (JPG, RAW...) trong {input_dir}")
 
