@@ -412,7 +412,11 @@ class Api:
             "cached": result.cached,
             "message": result.msg,
             "last_check": (result.data or {}).get("license_last_check", 0) if isinstance(result.data, dict) else 0,
+            "level": result.level,
         }
+
+    def get_pricing(self) -> dict[str, str]:
+        return license_client.get_pricing()
 
     def license_get_machine_id(self) -> str:
         return get_machine_id()
@@ -435,6 +439,13 @@ class Api:
         # Defer navigation so PyWebView can resolve the JS API callback first.
         threading.Timer(0.8, lambda: open_ui_page("index.html")).start()
         return True
+
+    def open_url(self, url: str) -> None:
+        import webbrowser
+        try:
+            webbrowser.open(url)
+        except Exception as exc:
+            print_system_exception("main.Api.open_url", exc)
 
     def get_chrome_path(self) -> str:
         return inspect_browser_state().get("path", "")
@@ -572,6 +583,9 @@ class Api:
         job.status = "running"
         js_job_update(job)
 
+        license_result = license_client.check_key(use_cache=True)
+        license_level = license_result.level if license_result.ok else "lite"
+
         def _run() -> None:
             js_job_update(job)
             try:
@@ -584,6 +598,7 @@ class Api:
                     preferences,
                     settings,
                     lambda uploaded=None, downloaded=None: js_job_counts(job, uploaded, downloaded),
+                    license_level=license_level,
                 )
                 job.downloaded_count = int(count or 0)
                 if job.stop_requested:

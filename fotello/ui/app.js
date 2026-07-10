@@ -508,6 +508,25 @@ async function loadSettings() {
     qs('set-poll-later-interval').value = settings.poll_later_interval || 30;
     qs('set-poll-ready-divisor').value = settings.poll_ready_divisor || 2;
     qs('set-poll-timeout').value = settings.poll_timeout || 1800;
+
+    // Load license level
+    const lic = await callApi('license_status');
+    const sidebarEl = document.getElementById('license-level-sidebar');
+    const upgradeBtn = document.getElementById('btn-upgrade-license');
+    if (lic && lic.ok) {
+        const levelStr = (lic.level || 'lite').toUpperCase();
+        if (sidebarEl) sidebarEl.textContent = levelStr;
+
+        if (levelStr === 'PLUS') {
+            if (upgradeBtn) upgradeBtn.style.display = 'none';
+        } else {
+            if (upgradeBtn) upgradeBtn.style.display = 'block';
+        }
+    } else {
+        const levelStr = 'CHƯA ACTIVE';
+        if (sidebarEl) sidebarEl.textContent = levelStr;
+        if (upgradeBtn) upgradeBtn.style.display = 'block';
+    }
 }
 
 async function saveSettings() {
@@ -577,6 +596,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     restoreSavedFolders();
     bindFolderPersistence();
+    initPricingModal();
     const ready = await waitForPyWebView();
     if (!ready) {
         addLog('PyWebView API chưa sẵn sàng. Hãy chạy bằng python main.py và kiểm tra js_api.', 'warn');
@@ -592,6 +612,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         await fotelloReconnect();
     }
 });
+
+function initPricingModal() {
+    const upgradeBtn = document.getElementById('btn-upgrade-license');
+    const pricingModal = document.getElementById('pricing-modal');
+    const closeBtn = document.getElementById('btn-close-pricing');
+
+    if (!pricingModal) return;
+
+    if (upgradeBtn) {
+        upgradeBtn.addEventListener('click', async () => {
+            pricingModal.classList.remove('hidden');
+            try {
+                const pricing = await callApi('get_pricing');
+                if (pricing) {
+                    const liteEl = document.getElementById('price-lite-val');
+                    const plusEl = document.getElementById('price-plus-val');
+                    if (liteEl && pricing.lite) liteEl.textContent = pricing.lite;
+                    if (plusEl && pricing.plus) plusEl.textContent = pricing.plus;
+                }
+            } catch (err) {
+                console.error("Lỗi lấy thông tin giá:", err);
+            }
+        });
+    }
+
+    const hideModal = () => {
+        pricingModal.classList.add('hidden');
+    };
+
+    if (closeBtn) closeBtn.addEventListener('click', hideModal);
+}
 
 window.addLog = addLog;
 window.setStatus = setStatus;

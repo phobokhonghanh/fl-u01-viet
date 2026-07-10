@@ -5,6 +5,8 @@ import base64
 
 _XOR_KEY = b"Ft2026Obf"
 
+CLIENT_VERSION = "1.0"
+
 
 def _dec(blob: str) -> str:
     raw = base64.b64decode(blob)
