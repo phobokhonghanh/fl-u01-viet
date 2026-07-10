@@ -15,6 +15,7 @@ const keyForm = document.getElementById('key-form');
 const keyNameInput = document.getElementById('key-name');
 const keyProductSelect = document.getElementById('key-product');
 const btnCreate = document.getElementById('btn-create');
+const keyLevelSelect = document.getElementById('key-level');
 const resultDiv = document.getElementById('new-key-result');
 const displayKey = document.getElementById('display-key');
 const btnCopy = document.getElementById('btn-copy');
@@ -71,6 +72,17 @@ function productBadge(product) {
     };
     const c = colors[value] || { bg: '#f1f5f9', color: '#64748b' };
     return `<span class="badge" style="background:${c.bg}; color:${c.color};">${labels[value] || escapeHtml(value)}</span>`;
+}
+
+function levelBadge(level) {
+    const value = String(level || 'lite').trim().toLowerCase();
+    const labels = { lite: 'Lite', plus: 'Plus' };
+    const colors = {
+        lite: { bg: '#f1f5f9', color: '#64748b' },
+        plus: { bg: '#fef3c7', color: '#b45309' }
+    };
+    const c = colors[value] || { bg: '#f1f5f9', color: '#64748b' };
+    return `<span class="badge" style="background:${c.bg}; color:${c.color}; font-weight:700;">${labels[value] || escapeHtml(value).toUpperCase()}</span>`;
 }
 
 function getStoredPassword() {
@@ -148,7 +160,7 @@ function renderKeysLoading() {
     if (oldPagination) oldPagination.remove();
     keysBody.innerHTML = `
         <tr>
-            <td colspan="6" data-empty="true">
+            <td colspan="7" data-empty="true">
                 <div class="admin-loading">
                     <div class="admin-loading-spinner"></div>
                     <span>Đang tải danh sách key...</span>
@@ -173,8 +185,8 @@ function getFilteredKeys() {
     let keys = allKeys;
     if (searchQuery) {
         const query = searchQuery.toLowerCase().trim();
-        keys = keys.filter(k => 
-            (k.name || '').toLowerCase().includes(query) || 
+        keys = keys.filter(k =>
+            (k.name || '').toLowerCase().includes(query) ||
             (k.key || '').toLowerCase().includes(query)
         );
     }
@@ -259,7 +271,7 @@ async function loadKeys({ resetPage = true } = {}) {
         showPasswordModal();
         const oldPagination = document.getElementById('keys-pagination');
         if (oldPagination) oldPagination.remove();
-        keysBody.innerHTML = `<tr><td colspan="6" data-empty="true" style="text-align: center; padding: 2rem; color: var(--error);">Không thể tải danh sách key. Mật khẩu không hợp lệ.</td></tr>`;
+        keysBody.innerHTML = `<tr><td colspan="7" data-empty="true" style="text-align: center; padding: 2rem; color: var(--error);">Không thể tải danh sách key. Mật khẩu không hợp lệ.</td></tr>`;
     }
 }
 
@@ -271,7 +283,7 @@ function renderKeys() {
     const filteredKeys = getFilteredKeys();
 
     if (!filteredKeys || filteredKeys.length === 0) {
-        keysBody.innerHTML = `<tr><td colspan="6" data-empty="true" style="text-align: center; padding: 2rem; color: var(--text-light);">Không tìm thấy Key phù hợp.</td></tr>`;
+        keysBody.innerHTML = `<tr><td colspan="7" data-empty="true" style="text-align: center; padding: 2rem; color: var(--text-light);">Không tìm thấy Key phù hợp.</td></tr>`;
         const oldPagination = document.getElementById('keys-pagination');
         if (oldPagination) oldPagination.remove();
         return;
@@ -285,8 +297,8 @@ function renderKeys() {
 
     keysBody.innerHTML = keys.map(k => {
         const expires = k.expires_at ? new Date(k.expires_at).toLocaleDateString('vi-VN') : 'Vĩnh viễn';
-        const machine = k.machine_id 
-            ? `<span style="font-size: 0.72rem; color: var(--text); font-weight: 500;" title="${escapeHtml(k.machine_id)}">${escapeHtml(k.machine_id.substring(0, 10))}...</span>` 
+        const machine = k.machine_id
+            ? `<span style="font-size: 0.72rem; color: var(--text); font-weight: 500;" title="${escapeHtml(k.machine_id)}">${escapeHtml(k.machine_id.substring(0, 10))}...</span>`
             : '<span style="color: var(--text-light); font-size: 0.72rem;">Chưa kích hoạt</span>';
 
         return `
@@ -294,6 +306,7 @@ function renderKeys() {
                 <td data-label="Tên" style="padding: 0.75rem;">${escapeHtml(k.name)}</td>
                 <td data-label="Key" style="padding: 0.75rem;"><code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-family: monospace;">${escapeHtml(k.key)}</code></td>
                 <td data-label="Ứng dụng" style="padding: 0.75rem;">${productBadge(k.product)}</td>
+                <td data-label="Gói" style="padding: 0.75rem;">${levelBadge(k.level)}</td>
                 <td data-label="Hạn dùng" style="padding: 0.75rem;">${expires}</td>
                 <td data-label="Máy khóa" style="padding: 0.75rem;">${machine}</td>
                 <td data-label="Hành động" style="padding: 0.75rem; text-align: center;">
@@ -483,6 +496,7 @@ keyForm.addEventListener('submit', async (e) => {
         password,
         name,
         product,
+        level: keyLevelSelect ? keyLevelSelect.value : 'lite',
         forever: expiryType === 'forever',
         days: days
     };

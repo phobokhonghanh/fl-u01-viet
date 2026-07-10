@@ -11,11 +11,15 @@
 <body>
   <div id="admin-app" class="container">
     <header>
-      <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1000px; margin: 0 auto 1.5rem;">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; max-width: 1000px; margin: 0 auto 1.5rem;">
         <h1 style="margin: 0; text-align: left;">Admin<span class="version">KEY</span></h1>
         <button id="btn-lock-session" class="btn-lock" title="Khóa/Đổi mật khẩu">
-          <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+          <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
+            </path>
           </svg>
         </button>
       </div>
@@ -24,21 +28,29 @@
     <div style="max-width: 1000px; margin: 0 auto;">
       <!-- Bảng điều khiển chính -->
       <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; gap: 0.5rem; flex-wrap: wrap;">
+        <div
+          style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; gap: 0.5rem; flex-wrap: wrap;">
           <h3 style="margin: 0;">Danh sách Keys</h3>
           <div class="header-actions">
-            <button id="btn-open-create-modal" class="btn-primary" style="padding: 0.45rem 0.9rem; width: auto; font-size: 0.82rem;">+ Tạo Key Mới</button>
-            <button id="btn-export" class="btn-clear" style="padding: 0.45rem 0.9rem; border: 1px solid var(--border); font-size: 0.82rem;">Export JSON</button>
-            <label for="import-file" class="btn-clear" style="cursor: pointer; padding: 0.45rem 0.9rem; border: 1px solid var(--border); margin: 0; font-size: 0.82rem;">Import JSON</label>
+            <button id="btn-open-create-modal" class="btn-primary"
+              style="padding: 0.45rem 0.9rem; width: auto; font-size: 0.82rem;">+ Tạo Key Mới</button>
+            <button id="btn-export" class="btn-clear"
+              style="padding: 0.45rem 0.9rem; border: 1px solid var(--border); font-size: 0.82rem;">Export JSON</button>
+            <label for="import-file" class="btn-clear"
+              style="cursor: pointer; padding: 0.45rem 0.9rem; border: 1px solid var(--border); margin: 0; font-size: 0.82rem;">Import
+              JSON</label>
             <input type="file" id="import-file" accept=".json" style="display: none;" />
-            <button id="btn-list" class="btn-clear" style="padding: 0.45rem 0.9rem; background: var(--primary); color: #fff; font-size: 0.82rem;">Làm mới</button>
+            <button id="btn-list" class="btn-clear"
+              style="padding: 0.45rem 0.9rem; background: var(--primary); color: #fff; font-size: 0.82rem;">Làm
+              mới</button>
           </div>
         </div>
 
         <!-- Thanh tìm kiếm & filter (Client-side) -->
         <div class="toolbar-controls">
           <div class="search-input-wrapper">
-            <input type="text" id="search-name-input" placeholder="Tìm kiếm theo tên key hoặc mã key..." style="padding-left: 0.75rem;" />
+            <input type="text" id="search-name-input" placeholder="Tìm kiếm theo tên key hoặc mã key..."
+              style="padding-left: 0.75rem;" />
           </div>
           <select id="filter-product-select" class="filter-select">
             <option value="all">Tất cả ứng dụng</option>
@@ -59,6 +71,7 @@
                 <th style="padding: 0.6rem 0.5rem;">Tên</th>
                 <th style="padding: 0.6rem 0.5rem;">Key</th>
                 <th style="padding: 0.6rem 0.5rem;">Ứng dụng</th>
+                <th style="padding: 0.6rem 0.5rem;">Gói</th>
                 <th style="padding: 0.6rem 0.5rem;">Hạn dùng</th>
                 <th style="padding: 0.6rem 0.5rem;">Máy khóa</th>
                 <th style="padding: 0.6rem 0.5rem; text-align: center;">Hành động</th>
@@ -66,7 +79,8 @@
             </thead>
             <tbody id="keys-body">
               <tr>
-                <td colspan="6" data-empty="true" style="text-align: center; padding: 2.5rem; color: var(--text-light);">
+                <td colspan="7" data-empty="true"
+                  style="text-align: center; padding: 2.5rem; color: var(--text-light);">
                   Nhấp vào "Làm mới" để tải danh sách key.
                 </td>
               </tr>
@@ -80,7 +94,8 @@
       <span>Điều hướng nhanh:</span>
       <a href="/admin-viet.html" class="is-active" aria-current="page">Admin Key</a>
       <a href="/admin-payment.html">Admin Payment</a>
-      <a class="admin-footer-credit" href="https://www.facebook.com/ndinhnguyende/">© 2026 Nguyen Dinh Nguyen - Development & Maintenance Solutions. All rights reserved.</a>
+      <a class="admin-footer-credit" href="https://www.facebook.com/ndinhnguyende/">© 2026 Nguyen Dinh Nguyen -
+        Development & Maintenance Solutions. All rights reserved.</a>
     </footer>
   </div>
 
@@ -121,6 +136,14 @@
           </select>
         </div>
 
+        <div class="form-group" id="key-level-group">
+          <label for="key-level">Gói</label>
+          <select id="key-level">
+            <option value="lite">Lite</option>
+            <option value="plus">Plus</option>
+          </select>
+        </div>
+
         <div class="form-group">
           <label>Thời hạn sử dụng</label>
           <div style="display: flex; gap: 1.5rem; margin-top: 0.5rem; align-items: center;">
@@ -140,7 +163,8 @@
 
       <div id="new-key-result"
         style="display: none; margin-top: 1.25rem; padding: 1rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
-        <p style="color: #166534; font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem;">Key đã được tạo thành công:</p>
+        <p style="color: #166534; font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem;">Key đã được tạo thành
+          công:</p>
         <div style="display: flex; gap: 0.5rem; align-items: center;">
           <code id="display-key"
             style="flex: 1; background: #fff; padding: 0.5rem; border-radius: 4px; border: 1px solid #bbf7d0; font-family: monospace; font-weight: 700; font-size: 1.1rem; color: #15803d; word-break: break-all;"></code>
@@ -160,10 +184,12 @@
       <form id="extend-key-form">
         <input type="hidden" id="extend-key-name" />
         <input type="hidden" id="extend-key-product" />
-        
-        <div class="form-group" style="background: var(--bg); padding: 0.75rem; border-radius: 8px; margin-bottom: 1.25rem;">
+
+        <div class="form-group"
+          style="background: var(--bg); padding: 0.75rem; border-radius: 8px; margin-bottom: 1.25rem;">
           <p style="font-size: 0.85rem; margin: 0; color: var(--text-light); line-height: 1.6;">
-            Đang gia hạn cho: <strong id="extend-display-name" style="color: var(--text);">Nguyen_Vancouver</strong><br/>
+            Đang gia hạn cho: <strong id="extend-display-name"
+              style="color: var(--text);">Nguyen_Vancouver</strong><br />
             Ứng dụng: <span id="extend-display-product" style="font-weight: 600; color: var(--primary);">AutoHDR</span>
           </p>
         </div>
@@ -182,7 +208,8 @@
           </div>
         </div>
 
-        <button type="submit" id="btn-extend-submit" class="btn-primary" style="margin-top: 0.5rem;">Xác nhận Gia hạn</button>
+        <button type="submit" id="btn-extend-submit" class="btn-primary" style="margin-top: 0.5rem;">Xác nhận Gia
+          hạn</button>
       </form>
     </div>
   </div>
