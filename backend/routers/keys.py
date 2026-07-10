@@ -24,6 +24,7 @@ class KeyRequest(BaseModel):
     key: str
     machine_id: Optional[str] = None
     product: Optional[str] = None
+    client_version: Optional[str] = None
 
 
 class AdminKeyListRequest(BaseModel):
@@ -36,6 +37,7 @@ class AdminKeyAddRequest(BaseModel):
     days: Optional[int] = 30
     forever: Optional[bool] = False
     product: Optional[str] = DEFAULT_KEY_PRODUCT
+    level: Optional[str] = "lite"
 
 
 class AdminKeyDeleteRequest(BaseModel):
@@ -57,6 +59,16 @@ def _check_admin(password: str, settings: Settings):
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid admin password")
 
 
+def parse_version(v_str: Optional[str]) -> tuple[int, ...]:
+    if not v_str:
+        return (0, 0)
+    try:
+        parts = tuple(int(x) for x in v_str.strip().split(".") if x.isdigit())
+        return parts if parts else (0, 0)
+    except Exception:
+        return (0, 0)
+
+
 @router.post("/key/active")
 async def verify_key(req: KeyRequest):
     """Verify if a key is active and matches machine_id (locking)."""
@@ -64,10 +76,29 @@ async def verify_key(req: KeyRequest):
     product = normalize_key_product(req.product)
     if not is_valid_key_product(product):
         raise HTTPException(status_code=400, detail="Invalid product")
-    is_valid = key_manager.check_key(settings.keys_filename, req.key, req.machine_id, product)
-    if not is_valid:
+        
+    if product == "fotello":
+        min_ver = parse_version(settings.min_client_version)
+        client_ver = parse_version(req.client_version)
+        if client_ver < min_ver:
+            return {
+                "status": "error",
+                "valid": False,
+                "message": f"Phiên bản Fotello của bạn đã cũ. Vui lòng tải phiên bản mới nhất {settings.min_client_version} để tiếp tục sử dụng."
+            }
+
+    record = key_manager.verify_and_get_key(settings.keys_filename, req.key, req.machine_id, product)
+    if not record:
         raise HTTPException(status_code=403, detail="Key is invalid, expired, used on another machine, or not allowed for this product")
-    return {"status": "ok", "valid": True}
+    return {
+        "status": "ok",
+        "valid": True,
+        "level": record.level,
+        "pricing": {
+            "lite": settings.price_lite,
+            "plus": settings.price_plus
+        }
+    }
 
 
 @router.post("/admin/keys/list")
@@ -94,7 +125,7 @@ async def admin_add_key(req: AdminKeyAddRequest, background_tasks: BackgroundTas
     if not is_valid_key_product(product):
         raise HTTPException(status_code=400, detail="Invalid product")
 
-    record, status = key_manager.add_or_update_key_by_name(settings.keys_filename, req.name, expiry, product)
+    record, status = key_manager.add_or_update_key_by_name(settings.keys_filename, req.name, expiry, product, req.level)
 
     # Notify telegram in the background
     action_str = "CREATED" if status == "new" else ("UPDATED" if status == "updated" else "EXISTS")
@@ -104,6 +135,7 @@ async def admin_add_key(req: AdminKeyAddRequest, background_tasks: BackgroundTas
         f"{status_emoji} <b>License Key {action_str}</b>\n"
         f"• <b>Name</b>: <code>{record.name}</code>\n"
         f"• <b>Product</b>: <code>{record.product}</code>\n"
+        f"• <b>Level</b>: <code>{record.level}</code>\n"
         f"• <b>Expiry</b>: <code>{record.expires_at or 'Forever'}</code>"
     )
     background_tasks.add_task(send_telegram_notification, msg)

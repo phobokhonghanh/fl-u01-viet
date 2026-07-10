@@ -69,6 +69,7 @@ def test_import_defaults_missing_product_and_skips_invalid(monkeypatch):
             "expires_at": None,
             "machine_id": None,
             "product": "autohdr",
+            "level": "lite",
         },
         {
             "key": "FOT",
@@ -77,6 +78,7 @@ def test_import_defaults_missing_product_and_skips_invalid(monkeypatch):
             "expires_at": None,
             "machine_id": None,
             "product": "fotello",
+            "level": "lite",
         },
     ]
     assert saved[-1] == [record.to_dict() for record in records]
@@ -90,5 +92,95 @@ def test_reset_key_machine(monkeypatch):
     assert updated_record is not None
     assert updated_record.machine_id is None
     assert records[0].machine_id is None
+
+
+def test_check_level_access():
+    from models.schemas import check_level_access, VALID_KEY_LEVELS
+    # Kiểm tra mặc định và các cấp độ hợp lệ
+    assert check_level_access("lite", "lite") is True
+    assert check_level_access("plus", "lite") is True
+    assert check_level_access("plus", "plus") is True
+    assert check_level_access("lite", "plus") is False
+
+    # Thử nghiệm với các cấp độ chưa hỗ trợ hoặc rỗng
+    assert check_level_access("", "lite") is True
+    assert check_level_access(None, "plus") is False
+
+    # Kiểm tra kịch bản giả lập có thêm cấp độ pro trong tương lai
+    # Lưu ý: Vì VALID_KEY_LEVELS được định nghĩa tĩnh, ta kiểm tra logic index
+    VALID_KEY_LEVELS.append("pro")
+    try:
+        assert check_level_access("pro", "lite") is True
+        assert check_level_access("pro", "plus") is True
+        assert check_level_access("pro", "pro") is True
+        assert check_level_access("plus", "pro") is False
+    finally:
+        VALID_KEY_LEVELS.remove("pro")
+
+
+def test_key_levels_verify_and_get_key(monkeypatch):
+    records = [
+        KeyRecord.from_dict({"key": "LITE_KEY", "name": "user_lite", "product": "fotello", "level": "lite"}),
+        KeyRecord.from_dict({"key": "PLUS_KEY", "name": "user_plus", "product": "fotello", "level": "plus"}),
+    ]
+    _patch_storage(monkeypatch, records)
+
+    # Verify LITE key
+    rec_lite = key_manager.verify_and_get_key("keys.json", "LITE_KEY", "mach-1", "fotello")
+    assert rec_lite is not None
+    assert rec_lite.level == "lite"
+
+    # Verify PLUS key
+    rec_plus = key_manager.verify_and_get_key("keys.json", "PLUS_KEY", "mach-2", "fotello")
+    assert rec_plus is not None
+    assert rec_plus.level == "plus"
+
+
+def test_parse_version():
+    from routers.keys import parse_version
+    assert parse_version("1.0") == (1, 0)
+    assert parse_version("2.1") == (2, 1)
+    assert parse_version("0.9") == (0, 9)
+    assert parse_version("") == (0, 0)
+    assert parse_version(None) == (0, 0)
+    assert parse_version("abc") == (0, 0)
+
+
+def test_verify_key_version_checking(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import app
+    from config.settings import Settings
+
+    # Mock storage để tránh gọi S3 thật
+    _patch_storage(monkeypatch, [])
+
+    # Ép Settings.min_client_version = "1.0"
+    monkeypatch.setattr(Settings, "min_client_version", "1.0")
+
+    client = TestClient(app)
+
+    # 1. Product fotello với client version cũ 0.9 -> Trả về 200 valid=False và thông báo nâng cấp
+    resp = client.post("/api/key/active", json={
+        "key": "SOMEKEY",
+        "machine_id": "mach-1",
+        "product": "fotello",
+        "client_version": "0.9"
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["valid"] is False
+    assert "Phiên bản Fotello của bạn đã cũ" in data["message"]
+
+    # 2. Product autohdr với version 0.9 -> Bỏ qua check version và đi tiếp vào check key. 
+    # Vì key "SOMEKEY" không hợp lệ trong mock DB rỗng, nó sẽ ném lỗi 403 (chứ không trả về 200 valid=False)
+    resp = client.post("/api/key/active", json={
+        "key": "SOMEKEY",
+        "machine_id": "mach-1",
+        "product": "autohdr",
+        "client_version": "0.9"
+    })
+    assert resp.status_code == 403
+
+
 
 

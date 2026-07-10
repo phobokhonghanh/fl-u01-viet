@@ -39,6 +39,13 @@ class Settings:
     telegram_chat_id: Optional[str] = None
     telegram_thread_id: Optional[int] = None
 
+    # Pricing Settings
+    price_lite: str = "400.000 VNĐ / tháng"
+    price_plus: str = "700.000 VNĐ / tháng"
+
+    # Version Settings
+    min_client_version: str = "1.0"
+
     @classmethod
     def from_env(cls, env_path: Optional[str] = None) -> "Settings":
         load_dotenv(dotenv_path=env_path)
@@ -67,4 +74,7 @@ class Settings:
             telegram_bot_token=get_env("TELEGRAM_BOT_TOKEN"),
             telegram_chat_id=get_env("TELEGRAM_CHAT_ID"),
             telegram_thread_id=int(get_env("TELEGRAM_THREAD_ID")) if get_env("TELEGRAM_THREAD_ID") else None,
+            price_lite=get_env("PRICE_LITE") or cls.price_lite,
+            price_plus=get_env("PRICE_PLUS") or cls.price_plus,
+            min_client_version=get_env("MIN_CLIENT_VERSION") or cls.min_client_version,
         )
