@@ -15,6 +15,7 @@ from .auth import (
 )
 from .browser_auth import fotello_grab_tokens_from_browser
 from .client import LogFn, noop_log, print_system_exception, set_request_logger
+from .license import check_level_access
 from .constants import (
     EP_CREATE_ENHANCE,
     EP_CREATE_LISTING,
@@ -83,6 +84,7 @@ def fotello_upload_and_enhance(
     settings: dict[str, Any] | None = None,
     count_fn=None,
     max_brackets_per_listing: int = 30,
+    license_level: str = "lite",
 ) -> list[str]:
     log = log or noop_log
     progress_fn = progress_fn or (lambda cur, total: None)
@@ -125,6 +127,20 @@ def fotello_upload_and_enhance(
     bracket_size = int(preferences.get("bracket_size") or 1)
     brackets = [images[i : i + bracket_size] for i in range(0, len(images), bracket_size)]
     total_work = total_images + len(brackets)
+
+    # Split brackets into chunks of at most max_brackets_per_listing brackets
+    bracket_chunks = [brackets[i : i + max_brackets_per_listing] for i in range(0, len(brackets), max_brackets_per_listing)]
+    max_workers = 8
+    if not check_level_access(license_level, "plus"):
+        time.sleep(2)
+        max_workers = 3
+        if len(bracket_chunks) > 1:
+            raise RuntimeError(
+                f"Giới hạn: 1 job xử lý tối đa {max_brackets_per_listing} brackets.\n"
+                f"Tổng {total_images} images. Cần tạo {len(bracket_chunks)} jobs - {len(brackets)} brackets\n"
+                f"----- Hãy nâng cấp lên PLUS để xử lý tự động -----"
+            )
+
     uploaded: dict[Path, str] = {}
 
     def _do_upload(img_path: Path) -> tuple[Path, str]:
@@ -132,11 +148,13 @@ def fotello_upload_and_enhance(
             return img_path, ""
         # log(f"  ↑ Đang tải lên {img_path.name}...", "info")
         log(f"Step 02: Đang tải lên - {img_path.name}", "info")
+        if not check_level_access(license_level, "plus"):
+            time.sleep(1)
         upload_id = upload_image_resumable(img_path, id_token, str(team_id))
         return img_path, upload_id
 
     done = 0
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(_do_upload, p) for p in images]
         for future in as_completed(futures):
             img_path, upload_id = future.result()
@@ -151,9 +169,6 @@ def fotello_upload_and_enhance(
     if is_cancelled():
         return []
 
-    # Split brackets into chunks of at most max_brackets_per_listing brackets
-    bracket_chunks = [brackets[i : i + max_brackets_per_listing] for i in range(0, len(brackets), max_brackets_per_listing)]
-    
     enhance_ids: list[str] = []
     listing_ids: list[str] = []
     

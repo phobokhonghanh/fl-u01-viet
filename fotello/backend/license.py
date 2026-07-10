@@ -14,6 +14,7 @@ from typing import Any
 import requests
 
 from .client import print_system_exception
+from .constants import CLIENT_VERSION
 
 
 CACHE_DURATION = 12 * 60 * 60
@@ -65,6 +66,24 @@ def clear_license_cache() -> None:
         _save_cache({})
 
 
+VALID_KEY_LEVELS = ["lite", "plus"]
+
+
+def check_level_access(current_level: str, required_level: str) -> bool:
+    """
+    Kiểm tra xem cấp độ hiện tại có đủ quyền sử dụng tính năng yêu cầu hay không.
+    So sánh dựa trên chỉ mục trong danh sách VALID_KEY_LEVELS.
+    """
+    curr = str(current_level or "lite").strip().lower()
+    req = str(required_level or "lite").strip().lower()
+    curr = curr if curr in VALID_KEY_LEVELS else "lite"
+    req = req if req in VALID_KEY_LEVELS else "lite"
+    try:
+        return VALID_KEY_LEVELS.index(curr) >= VALID_KEY_LEVELS.index(req)
+    except ValueError:
+        return False
+
+
 @dataclass
 class LicenseResult:
     ok: bool
@@ -73,6 +92,16 @@ class LicenseResult:
     machine_id: str = ""
     key: str = ""
     data: dict[str, Any] | None = None
+
+    @property
+    def level(self) -> str:
+        if not self.data:
+            return "lite"
+        # Nếu lấy từ cache, data sẽ có dạng {"license_data": {...}}
+        if "license_data" in self.data:
+            return self.data.get("license_data", {}).get("level", "lite")
+        # Nếu lấy trực tiếp từ API response
+        return self.data.get("level", "lite")
 
 
 class LicenseClient:
@@ -120,7 +149,12 @@ class LicenseClient:
         try:
             res = requests.post(
                 f"{self.base_url}/api/key/active",
-                json={"key": key, "machine_id": machine_id, "product": LICENSE_PRODUCT},
+                json={
+                    "key": key,
+                    "machine_id": machine_id,
+                    "product": LICENSE_PRODUCT,
+                    "client_version": CLIENT_VERSION,
+                },
                 timeout=15,
             )
             if res.status_code == 403:
@@ -137,6 +171,7 @@ class LicenseClient:
             is_valid = bool(data.get("valid", False))
             message = str(data.get("message") or data.get("msg") or "")
             if is_valid:
+                pricing = data.get("pricing")
                 payload = {
                     "active_key": key,
                     "license_last_check": now,
@@ -145,6 +180,8 @@ class LicenseClient:
                     "license_message": message or "Kích hoạt thành công",
                     "license_data": data,
                 }
+                if pricing:
+                    payload["pricing"] = pricing
                 _save_cache(payload)
                 return LicenseResult(True, payload["license_message"], machine_id=machine_id, key=key, data=data)
             clear_license_cache()
@@ -161,3 +198,16 @@ class LicenseClient:
         except Exception as exc:
             print_system_exception("license.check_key unexpected error", exc)
             return LicenseResult(False, f"Lỗi kiểm tra license: {exc}", machine_id=machine_id, key=key)
+
+    def get_pricing(self) -> dict[str, str]:
+        try:
+            cache = _load_cache()
+            pricing = cache.get("pricing") or cache.get("license_data", {}).get("pricing")
+            if pricing and isinstance(pricing, dict) and "lite" in pricing and "plus" in pricing:
+                return pricing
+        except Exception as e:
+            print_system_exception("license.get_pricing error", e)
+        return {
+            "lite": "Liên hệ Admin",
+            "plus": "Liên hệ Admin"
+        }

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,9 +8,21 @@
     <link rel="icon" href="logo.png">
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <main class="app">
         <aside class="sidebar">
+            <div class="license-box-sidebar"
+                style="margin-bottom: 16px; padding: 10px; border: 1px dashed var(--border); border-radius: 6px; display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <span style="color: var(--muted);">Gói License:</span>
+                    <strong id="license-level-sidebar"
+                        style="color: var(--accent); font-weight: bold; text-transform: uppercase;">Lite</strong>
+                </div>
+                <button id="btn-upgrade-license" class="primary"
+                    style="padding: 4px 8px; font-size: 11px; width: 100%; font-weight: bold; margin-top: 4px; display: none;">Nâng
+                    cấp lên PLUS</button>
+            </div>
             <button class="nav active" data-panel="download-panel">Listings</button>
             <button class="nav" data-panel="upload-panel">Upload & Enhance</button>
             <button class="nav" data-panel="settings-panel">Settings</button>
@@ -61,7 +74,8 @@
                 <div id="fotello-listings" class="listing-box">
                     Bấm “Kết nối Fotello”, sau đó “Tải danh sách”.
                 </div>
-                <button id="btn-start-download" class="primary wide" onclick="fotelloStartDownload()">Tải ảnh đã chọn</button>
+                <button id="btn-start-download" class="primary wide" onclick="fotelloStartDownload()">Tải ảnh đã
+                    chọn</button>
             </section>
 
             <section id="upload-panel" class="panel">
@@ -115,7 +129,8 @@
                         </select>
                     </label>
                 </div>
-                <button id="btn-start-upload" class="primary wide" onclick="fotelloStartUpload()">Upload & tải kết quả</button>
+                <button id="btn-start-upload" class="primary wide" onclick="fotelloStartUpload()">Upload & tải kết
+                    quả</button>
             </section>
 
             <section id="settings-panel" class="panel">
@@ -154,7 +169,8 @@
                         </select>
                     </label>
                     <label>Browser cache dir
-                        <input type="text" id="set-browser-cache-dir" placeholder="%LOCALAPPDATA%\\FotelloClient\\runtime">
+                        <input type="text" id="set-browser-cache-dir"
+                            placeholder="%LOCALAPPDATA%\\FotelloClient\\runtime">
                     </label>
                     <label>Browser override
                         <input type="text" id="set-browser-override" placeholder="Optional full path tới chrome.exe">
@@ -205,6 +221,79 @@
             </section>
         </section>
     </main>
-    <script src="app.js"></script>
+
+    <!-- Pricing Modal -->
+    <div id="pricing-modal" class="modal-overlay hidden"
+        style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); display: grid; place-items: center; z-index: 9999; backdrop-filter: blur(4px);">
+        <div class="modal-content"
+            style="background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 90%; max-width: 500px; box-shadow: var(--shadow); position: relative; animation: modalFadeIn 0.3s ease;">
+            <button id="btn-close-pricing"
+                style="position: absolute; top: 12px; right: 12px; background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 4px;">&times;</button>
+            <h3 style="margin-top: 0; margin-bottom: 8px; font-size: 18px; color: var(--text);">Nâng Cấp Gói Dịch Vụ
+            </h3>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 20px;">Mở khóa các tính năng nâng cao phục vụ
+                công việc chuyên nghiệp của bạn.</p>
+
+            <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px;">
+                <!-- Lite tier card -->
+                <div
+                    style="border: 1px solid var(--border); padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.02);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <strong style="color: var(--muted);">Gói Lite (Mặc định)</strong>
+                        <span id="price-lite-val" style="font-weight: bold; color: var(--muted);">Đang tải...</span>
+                    </div>
+                    <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: var(--muted); line-height: 1.5;">
+                        <li>Upload tối đa 30 brackets / đợt.</li>
+                        <li>Chạy đơn luồng thông thường.</li>
+                    </ul>
+                </div>
+
+                <!-- Plus tier card -->
+                <div
+                    style="border: 2px solid var(--accent); padding: 12px; border-radius: 8px; background: rgba(0, 211, 167, 0.05); position: relative;">
+                    <span
+                        style="position: absolute; top: -10px; right: 12px; background: var(--accent); color: #02110e; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">Khuyên
+                        dùng</span>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <strong style="color: var(--accent);">Gói Plus</strong>
+                        <span id="price-plus-val" style="font-weight: bold; color: var(--accent);">Đang tải...</span>
+                    </div>
+                    <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: var(--text); line-height: 1.5;">
+                        <li><strong>Không giới hạn số lượng brackets.</strong></li>
+                        <li><strong>Tự động chia job thành nhiều listing (Bracket Splitting).</strong></li>
+                        <li>Tốc độ xử lý ưu tiên.</li>
+                    </ul>
+                </div>
+
+                <footer class="license-footer" style="padding-top: 18px; text-align: center;">
+                    <a href="https://www.facebook.com/ndinhnguyende/" target="_blank" rel="noopener noreferrer">
+                        By Nguyen Dinh Nguyen
+                    </a>
+                </footer>
+            </div>
+        </div>
+
+        <style>
+            @keyframes modalFadeIn {
+                from {
+                    opacity: 0;
+                    transform: scale(0.95);
+                }
+
+                to {
+                    opacity: 1;
+                    transform: scale(1);
+                }
+            }
+
+            .modal-overlay.hidden {
+                display: none !important;
+            }
+        </style>
+
+        <script src="app.js"></script>
 </body>
+
 </html>
