@@ -44,7 +44,7 @@ class Settings:
     price_plus: str = "700.000 VNĐ / tháng"
 
     # Version Settings
-    min_client_version: str = "1.0"
+    min_client_version: str = "2.0"
 
     @classmethod
     def from_env(cls, env_path: Optional[str] = None) -> "Settings":

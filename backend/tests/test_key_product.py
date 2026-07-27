@@ -94,6 +94,22 @@ def test_reset_key_machine(monkeypatch):
     assert records[0].machine_id is None
 
 
+def test_reset_all_keys_machine(monkeypatch):
+    records = [
+        KeyRecord(key="KEY1", name="user1", machine_id="m1", product="autohdr"),
+        KeyRecord(key="KEY2", name="user2", machine_id="m2", product="fotello"),
+        KeyRecord(key="KEY3", name="user3", machine_id=None, product="autohdr"),
+    ]
+    _patch_storage(monkeypatch, records)
+
+    reset_count = key_manager.reset_all_keys_machine("keys.json")
+    assert reset_count == 2
+    assert records[0].machine_id is None
+    assert records[1].machine_id is None
+    assert records[2].machine_id is None
+
+
+
 def test_check_level_access():
     from models.schemas import check_level_access, VALID_KEY_LEVELS
     # Kiểm tra mặc định và các cấp độ hợp lệ
@@ -171,15 +187,18 @@ def test_verify_key_version_checking(monkeypatch):
     assert data["valid"] is False
     assert "Phiên bản Fotello của bạn đã cũ" in data["message"]
 
-    # 2. Product autohdr với version 0.9 -> Bỏ qua check version và đi tiếp vào check key. 
-    # Vì key "SOMEKEY" không hợp lệ trong mock DB rỗng, nó sẽ ném lỗi 403 (chứ không trả về 200 valid=False)
+    # 2. Product autohdr với version 0.9 -> Cũng kiểm tra version và trả về 200 valid=False thông báo nâng cấp
     resp = client.post("/api/key/active", json={
         "key": "SOMEKEY",
         "machine_id": "mach-1",
         "product": "autohdr",
         "client_version": "0.9"
     })
-    assert resp.status_code == 403
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["valid"] is False
+    assert "Phiên bản AutoHDR của bạn đã cũ" in data["message"]
+
 
 
 

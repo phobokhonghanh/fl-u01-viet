@@ -93,21 +93,44 @@ def get_hwid() -> str:
 
 
 
+import shutil
+from core.constants import CLIENT_VERSION
+
+
 def get_app_data_dir() -> str:
     """
     Get the application data directory for storing logs, cache, and session data.
-    
-    Windows: %APPDATA%/AutoHDR/
-    Linux/Mac: ~/.autohdr/
+    Organized by version (e.g. %APPDATA%/AutoHDR/v1.0/).
+    Deletes old version directories/files automatically.
     """
     if sys.platform == "win32":
         base = os.environ.get("APPDATA", os.path.expanduser("~"))
-        app_dir = os.path.join(base, "AutoHDR")
+        base_dir = os.path.join(base, "AutoHDR")
     else:
-        app_dir = os.path.join(os.path.expanduser("~"), ".autohdr")
+        base_dir = os.path.join(os.path.expanduser("~"), ".autohdr")
     
-    os.makedirs(app_dir, exist_ok=True)
-    return app_dir
+    os.makedirs(base_dir, exist_ok=True)
+    target_version_name = f"v{CLIENT_VERSION}"
+    version_dir = os.path.join(base_dir, target_version_name)
+
+    # Clean up old version files and folders inside base_dir
+    try:
+        for item in os.listdir(base_dir):
+            if item != target_version_name:
+                item_path = os.path.join(base_dir, item)
+                try:
+                    if os.path.isdir(item_path):
+                        shutil.rmtree(item_path, ignore_errors=True)
+                    else:
+                        os.remove(item_path)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    os.makedirs(version_dir, exist_ok=True)
+    return version_dir
+
 
 
 def get_logs_dir() -> str:

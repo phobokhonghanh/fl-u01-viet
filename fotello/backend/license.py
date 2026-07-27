@@ -7,7 +7,7 @@ import platform
 import sys
 import time
 import uuid
-import subprocess
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,16 +24,42 @@ LICENSE_PRODUCT = "fotello"
 
 
 def get_app_data_dir() -> Path:
+    """
+    Get the application data directory for storing logs, cache, and session data.
+    Organized by version (e.g. %APPDATA%/FotelloClient/v1.0/).
+    Deletes old version directories/files automatically.
+    """
     if sys.platform == "win32":
         base = os.environ.get("APPDATA", os.path.expanduser("~"))
-        app_dir = Path(base) / "FotelloClient"
+        base_dir = Path(base) / "FotelloClient"
     else:
-        app_dir = Path.home() / ".fotello"
-    app_dir.mkdir(parents=True, exist_ok=True)
-    return app_dir
+        base_dir = Path.home() / ".fotello"
+
+    base_dir.mkdir(parents=True, exist_ok=True)
+    target_version_name = f"v{CLIENT_VERSION}"
+    version_dir = base_dir / target_version_name
+
+    # Clean up old version files and folders inside base_dir
+    try:
+        for child in base_dir.iterdir():
+            if child.name != target_version_name:
+                try:
+                    if child.is_dir():
+                        shutil.rmtree(child, ignore_errors=True)
+                    else:
+                        child.unlink(missing_ok=True)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    version_dir.mkdir(parents=True, exist_ok=True)
+    return version_dir
 
 
-CACHE_FILE = get_app_data_dir() / "license_cache.json"
+def _get_cache_file() -> Path:
+    return get_app_data_dir() / "license_cache.json"
+
 
 
 def _get_raw_machine_id() -> str:
@@ -123,27 +149,31 @@ def get_machine_id() -> str:
 
 
 def _load_cache() -> dict[str, Any]:
-    if not CACHE_FILE.exists():
+    cache_file = _get_cache_file()
+    if not cache_file.exists():
         return {}
     try:
-        data = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+        data = json.loads(cache_file.read_text(encoding="utf-8"))
     except Exception as exc:
-        print_system_exception(f"license._load_cache: {CACHE_FILE}", exc)
+        print_system_exception(f"license._load_cache: {cache_file}", exc)
         return {}
     return data if isinstance(data, dict) else {}
 
 
 def _save_cache(data: dict[str, Any]) -> None:
-    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    CACHE_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    cache_file = _get_cache_file()
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def clear_license_cache() -> None:
+    cache_file = _get_cache_file()
     try:
-        CACHE_FILE.unlink(missing_ok=True)
+        cache_file.unlink(missing_ok=True)
     except Exception as exc:
-        print_system_exception(f"license.clear_license_cache: {CACHE_FILE}", exc)
+        print_system_exception(f"license.clear_license_cache: {cache_file}", exc)
         _save_cache({})
+
 
 
 VALID_KEY_LEVELS = ["lite", "plus"]

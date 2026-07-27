@@ -170,6 +170,19 @@ def reset_key_machine(s3_key: str, key_or_name: str) -> Optional[KeyRecord]:
             return record
     return None
 
+def reset_all_keys_machine(s3_key: str) -> int:
+    """Reset the machine_id of ALL keys to None."""
+    records = load_keys(s3_key)
+    reset_count = 0
+    for record in records:
+        if record.machine_id is not None:
+            record.machine_id = None
+            reset_count += 1
+    if reset_count > 0:
+        save_keys(s3_key, records)
+    return reset_count
+
+
 def import_keys(s3_key: str, new_keys_data: list) -> int:
     """Import valid keys from JSON array."""
     records = load_keys(s3_key)

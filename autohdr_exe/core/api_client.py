@@ -10,6 +10,7 @@ from typing import Optional
 from core.cache import cache
 from core.stats_client import stats_client
 from core.utils import get_hwid
+from core.constants import CLIENT_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class ApiClient:
         try:
             res = requests.post(
                 f"{self.base_url}/api/key/active",
-                json={"key": key, "machine_id": machine_id},
+                json={"key": key, "machine_id": machine_id, "client_version": CLIENT_VERSION},
                 timeout=15,
             )
 
