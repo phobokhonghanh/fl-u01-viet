@@ -81,37 +81,39 @@ jobs:
 
       - name: Đóng gói Fotello Windows (.exe)
         if: runner.os == 'Windows'
+        shell: pwsh
         working-directory: ./build/fotello_stage
         run: |
-          pyinstaller \
-            --onefile \
-            --noconsole \
-            --name Fotello_Client_${{ env.VERSION }} \
-            --add-data "ui;ui" \
-            --add-data "settings.json;." \
-            --paths "." \
-            --collect-submodules requests \
-            --collect-submodules selenium \
-            --collect-data certifi \
-            --hidden-import browser_runtime \
-            --hidden-import backend \
-            --hidden-import backend.auth \
-            --hidden-import backend.browser_auth \
-            --hidden-import backend.client \
-            --hidden-import backend.constants \
-            --hidden-import backend.downloads \
-            --hidden-import backend.firestore \
-            --hidden-import backend.fotello_api \
-            --hidden-import backend.license \
-            --hidden-import backend.service \
-            --hidden-import pyarmor_runtime_000000 \
-            --hidden-import webview \
-            --hidden-import webview.platforms.winforms \
-            --exclude-module PyQt5 \
-            --exclude-module PyQt6 \
-            --exclude-module PySide2 \
-            --exclude-module PySide6 \
+          pyinstaller `
+            --onefile `
+            --noconsole `
+            --name Fotello_Client_${{ env.VERSION }} `
+            --add-data "ui;ui" `
+            --add-data "settings.json;." `
+            --paths "." `
+            --collect-submodules requests `
+            --collect-submodules selenium `
+            --collect-data certifi `
+            --hidden-import browser_runtime `
+            --hidden-import backend `
+            --hidden-import backend.auth `
+            --hidden-import backend.browser_auth `
+            --hidden-import backend.client `
+            --hidden-import backend.constants `
+            --hidden-import backend.downloads `
+            --hidden-import backend.firestore `
+            --hidden-import backend.fotello_api `
+            --hidden-import backend.license `
+            --hidden-import backend.service `
+            --hidden-import pyarmor_runtime_000000 `
+            --hidden-import webview `
+            --hidden-import webview.platforms.winforms `
+            --exclude-module PyQt5 `
+            --exclude-module PyQt6 `
+            --exclude-module PySide2 `
+            --exclude-module PySide6 `
             main.py
+
 
       - name: Đóng gói Fotello macOS
         if: runner.os != 'Windows'
