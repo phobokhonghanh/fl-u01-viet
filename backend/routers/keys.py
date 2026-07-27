@@ -77,15 +77,16 @@ async def verify_key(req: KeyRequest):
     if not is_valid_key_product(product):
         raise HTTPException(status_code=400, detail="Invalid product")
         
-    if product == "fotello":
-        min_ver = parse_version(settings.min_client_version)
-        client_ver = parse_version(req.client_version)
-        if client_ver < min_ver:
-            return {
-                "status": "error",
-                "valid": False,
-                "message": f"Phiên bản Fotello của bạn đã cũ. Vui lòng tải phiên bản mới nhất {settings.min_client_version} để tiếp tục sử dụng."
-            }
+    min_ver = parse_version(settings.min_client_version)
+    client_ver = parse_version(req.client_version)
+    if client_ver < min_ver:
+        prod_name = "AutoHDR" if product == "autohdr" else "Fotello"
+        return {
+            "status": "error",
+            "valid": False,
+            "message": f"Phiên bản {prod_name} của bạn đã cũ. Vui lòng tải phiên bản mới nhất {settings.min_client_version} để tiếp tục sử dụng."
+        }
+
 
     record = key_manager.verify_and_get_key(settings.keys_filename, req.key, req.machine_id, product)
     if not record:
@@ -216,6 +217,25 @@ async def admin_reset_key(req: AdminKeyResetRequest, background_tasks: Backgroun
     background_tasks.add_task(send_telegram_notification, msg)
 
     return {"status": "ok", "record": record.to_dict()}
+
+
+@router.post("/admin/keys/reset-all")
+async def admin_reset_all_keys(req: AdminKeyExportRequest, background_tasks: BackgroundTasks):
+
+    """Reset machine_id of ALL active keys (Admin only)."""
+    settings = Settings.from_env()
+    _check_admin(req.password, settings)
+
+    count = key_manager.reset_all_keys_machine(settings.keys_filename)
+
+    msg = (
+        f"🔄 <b>ALL License Keys RESET</b>\n"
+        f"• <b>Total Keys Reset</b>: <code>{count}</code>"
+    )
+    background_tasks.add_task(send_telegram_notification, msg)
+
+    return {"status": "ok", "message": f"Successfully reset machine_id for {count} keys", "count": count}
+
 
 
 @router.post("/admin/keys/import")

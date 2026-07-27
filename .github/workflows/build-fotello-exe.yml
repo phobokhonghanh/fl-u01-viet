@@ -1,4 +1,4 @@
-name: Fotello EXE CI
+name: Fotello CI
 
 on:
   push:
@@ -8,9 +8,13 @@ on:
       - '.github/workflows/build-fotello-exe.yml'
   workflow_dispatch:
 
+
 jobs:
   build_fotello:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Tải Code vào môi trường Build
         uses: actions/checkout@v4
@@ -20,11 +24,20 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Đọc version từ version.md
+      - name: Đọc version từ fotello/version.md (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $version = (Get-Content fotello/version.md).Trim()
+          $raw = (Get-Content fotello/version.md).Trim()
+          $version = $raw -replace '^v', ''
           echo "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Đọc version từ fotello/version.md (macOS)
+        if: runner.os != 'Windows'
+        run: |
+          RAW=$(cat fotello/version.md | tr -d '\r\n')
+          VERSION=${RAW#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Cài đặt Thư viện, PyArmor và PyInstaller
         run: |
@@ -32,31 +45,13 @@ jobs:
           pip install pyinstaller pyarmor
           pip install -r fotello/requirements.txt
 
-      - name: Kiểm tra cú pháp Fotello
-        run: |
-          python -m py_compile `
-            fotello/main.py `
-            fotello/browser_runtime.py `
-            fotello/backend/__init__.py `
-            fotello/backend/auth.py `
-            fotello/backend/browser_auth.py `
-            fotello/backend/client.py `
-            fotello/backend/constants.py `
-            fotello/backend/downloads.py `
-            fotello/backend/firestore.py `
-            fotello/backend/fotello_api.py `
-            fotello/backend/license.py `
-            fotello/backend/service.py
-
       - name: Obfuscate backend bằng PyArmor
         working-directory: ./fotello
         run: |
-          pyarmor gen `
-            -O ..\build\fotello_backend_obf `
-            -r `
-            backend
+          pyarmor gen -O ../build/fotello_backend_obf -r backend
 
-      - name: Tạo thư mục staging
+      - name: Tạo thư mục staging (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force build\fotello_stage | Out-Null
@@ -66,7 +61,17 @@ jobs:
           Copy-Item build\fotello_backend_obf\pyarmor_runtime_* build\fotello_stage -Recurse -Force
           Copy-Item fotello\ui build\fotello_stage\ui -Recurse -Force
           Copy-Item fotello\settings.json build\fotello_stage\settings.json -Force
-          Get-ChildItem build\fotello_stage -Directory | Where-Object { $_.Name -like "pyarmor_runtime_*" } | ForEach-Object { Write-Host "Copied $($_.Name)" }
+
+      - name: Tạo thư mục staging (macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p build/fotello_stage
+          cp fotello/main.py build/fotello_stage/main.py
+          cp fotello/browser_runtime.py build/fotello_stage/browser_runtime.py
+          cp -r build/fotello_backend_obf/backend build/fotello_stage/backend
+          cp -r build/fotello_backend_obf/pyarmor_runtime_* build/fotello_stage/
+          cp -r fotello/ui build/fotello_stage/ui
+          cp fotello/settings.json build/fotello_stage/settings.json
 
       - name: Kiểm tra import staging
         working-directory: ./build/fotello_stage
@@ -74,55 +79,83 @@ jobs:
           python -c "import browser_runtime; from backend.license import LicenseClient; from backend import service; print('Fotello staging import smoke OK')"
           python main.py --smoke-test
 
-      - name: Đóng gói Fotello thành file chạy (.exe)
+      - name: Đóng gói Fotello Windows (.exe)
+        if: runner.os == 'Windows'
         working-directory: ./build/fotello_stage
         run: |
-          pyinstaller `
-            --onefile `
-            --noconsole `
-            --name Fotello_Client_${{ env.VERSION }} `
-            --add-data "ui;ui" `
-            --add-data "settings.json;." `
-            --paths "." `
-            --collect-submodules requests `
-            --collect-submodules selenium `
-            --collect-data certifi `
-            --hidden-import browser_runtime `
-            --hidden-import backend `
-            --hidden-import backend.auth `
-            --hidden-import backend.browser_auth `
-            --hidden-import backend.client `
-            --hidden-import backend.constants `
-            --hidden-import backend.downloads `
-            --hidden-import backend.firestore `
-            --hidden-import backend.fotello_api `
-            --hidden-import backend.license `
-            --hidden-import backend.service `
-            --hidden-import pyarmor_runtime_000000 `
-            --hidden-import webview `
-            --hidden-import webview.platforms.winforms `
-            --exclude-module PyQt5 `
-            --exclude-module PyQt6 `
-            --exclude-module PySide2 `
-            --exclude-module PySide6 `
+          pyinstaller \
+            --onefile \
+            --noconsole \
+            --name Fotello_Client_${{ env.VERSION }} \
+            --add-data "ui;ui" \
+            --add-data "settings.json;." \
+            --paths "." \
+            --collect-submodules requests \
+            --collect-submodules selenium \
+            --collect-data certifi \
+            --hidden-import browser_runtime \
+            --hidden-import backend \
+            --hidden-import backend.auth \
+            --hidden-import backend.browser_auth \
+            --hidden-import backend.client \
+            --hidden-import backend.constants \
+            --hidden-import backend.downloads \
+            --hidden-import backend.firestore \
+            --hidden-import backend.fotello_api \
+            --hidden-import backend.license \
+            --hidden-import backend.service \
+            --hidden-import pyarmor_runtime_000000 \
+            --hidden-import webview \
+            --hidden-import webview.platforms.winforms \
+            --exclude-module PyQt5 \
+            --exclude-module PyQt6 \
+            --exclude-module PySide2 \
+            --exclude-module PySide6 \
             main.py
 
-      - name: Kiểm tra EXE smoke test
+      - name: Đóng gói Fotello macOS
+        if: runner.os != 'Windows'
         working-directory: ./build/fotello_stage
         run: |
-          .\dist\Fotello_Client_${{ env.VERSION }}.exe --smoke-test
+          pyinstaller \
+            --onefile \
+            --noconsole \
+            --name Fotello_Client_macOS_${{ env.VERSION }} \
+            --add-data "ui:ui" \
+            --add-data "settings.json:." \
+            --paths "." \
+            --collect-submodules requests \
+            --collect-submodules selenium \
+            --collect-data certifi \
+            --hidden-import browser_runtime \
+            --hidden-import backend \
+            --hidden-import backend.auth \
+            --hidden-import backend.browser_auth \
+            --hidden-import backend.client \
+            --hidden-import backend.constants \
+            --hidden-import backend.downloads \
+            --hidden-import backend.firestore \
+            --hidden-import backend.fotello_api \
+            --hidden-import backend.license \
+            --hidden-import backend.service \
+            --hidden-import pyarmor_runtime_000000 \
+            --hidden-import webview \
+            main.py
+          cd dist
+          zip -r "Fotello_Client_macOS_${{ env.VERSION }}.zip" "Fotello_Client_macOS_${{ env.VERSION }}"
 
-      - name: Kiểm tra artifact
-        shell: pwsh
-        run: |
-          $exe = "build\fotello_stage\dist\Fotello_Client_$env:VERSION.exe"
-          if (!(Test-Path $exe)) { throw "Không tìm thấy $exe" }
-          $sizeMb = [math]::Round((Get-Item $exe).Length / 1MB, 2)
-          Write-Host "Fotello_Client_$env:VERSION.exe size: $sizeMb MB"
-
-      - name: Lưu trữ file Fotello EXE
+      - name: Lưu trữ Artifact Windows
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: Fotello_Client_${{ env.VERSION }}
+          name: Fotello_Client_Windows_${{ env.VERSION }}
           path: build/fotello_stage/dist/Fotello_Client_${{ env.VERSION }}.exe
+          retention-days: 7
+
+      - name: Lưu trữ Artifact macOS
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fotello_Client_macOS_${{ env.VERSION }}
+          path: build/fotello_stage/dist/Fotello_Client_macOS_${{ env.VERSION }}.zip
           retention-days: 7

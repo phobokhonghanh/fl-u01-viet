@@ -1,38 +1,76 @@
-name: EXE CI
+name: AutoHDR CI
 
 on:
   push:
     branches: ["deploy/exe"]
     paths:
       - 'autohdr_exe/**'
+      - '.github/workflows/build-exe.yml'
   workflow_dispatch:
 
+
 jobs:
-  build_v2:
-    runs-on: windows-latest
+  build_autohdr:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
-    - name: Tải Code vào môi trường Build
-      uses: actions/checkout@v4
+      - name: Tải Code vào môi trường Build
+        uses: actions/checkout@v4
 
-    - name: Cài đặt Python 3.12
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
+      - name: Cài đặt Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-    - name: Cài đặt Thư viện và PyInstaller
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyinstaller
-        pip install -r autohdr_exe/requirements.txt
+      - name: Đọc version từ autohdr_exe/version.md (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $raw = (Get-Content autohdr_exe/version.md).Trim()
+          $version = $raw -replace '^v', ''
+          echo "VERSION=$version" >> $env:GITHUB_ENV
 
-    - name: Đóng gói thành file chạy (.exe)
-      working-directory: ./autohdr_exe
-      run: |
-        pyinstaller --onefile --noconsole --name AutoHDR_download main.py
+      - name: Đọc version từ autohdr_exe/version.md (macOS)
+        if: runner.os != 'Windows'
+        run: |
+          RAW=$(cat autohdr_exe/version.md | tr -d '\r\n')
+          VERSION=${RAW#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-    - name: Lưu trữ và gửi file cài đặt v2
-      uses: actions/upload-artifact@v4
-      with:
-        name: AutoHDR_download
-        path: autohdr_exe/dist/AutoHDR_download.exe
-        retention-days: 7
+      - name: Cài đặt Thư viện và PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r autohdr_exe/requirements.txt
+
+      - name: Đóng gói Windows (.exe)
+        if: runner.os == 'Windows'
+        working-directory: ./autohdr_exe
+        run: |
+          pyinstaller --onefile --noconsole --name AutoHDR_Client_${{ env.VERSION }} main.py
+
+      - name: Đóng gói macOS
+        if: runner.os != 'Windows'
+        working-directory: ./autohdr_exe
+        run: |
+          pyinstaller --onefile --noconsole --name AutoHDR_Client_macOS_${{ env.VERSION }} main.py
+          cd dist
+          zip -r "AutoHDR_Client_macOS_${{ env.VERSION }}.zip" "AutoHDR_Client_macOS_${{ env.VERSION }}"
+
+      - name: Lưu trữ Artifact Windows
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoHDR_Client_Windows_${{ env.VERSION }}
+          path: autohdr_exe/dist/AutoHDR_Client_${{ env.VERSION }}.exe
+          retention-days: 7
+
+      - name: Lưu trữ Artifact macOS
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoHDR_Client_macOS_${{ env.VERSION }}
+          path: autohdr_exe/dist/AutoHDR_Client_macOS_${{ env.VERSION }}.zip
+          retention-days: 7
