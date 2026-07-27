@@ -126,19 +126,37 @@ async def admin_add_key(req: AdminKeyAddRequest, background_tasks: BackgroundTas
     if not is_valid_key_product(product):
         raise HTTPException(status_code=400, detail="Invalid product")
 
-    record, status = key_manager.add_or_update_key_by_name(settings.keys_filename, req.name, expiry, product, req.level)
+    record, status, changes = key_manager.add_or_update_key_by_name(settings.keys_filename, req.name, expiry, product, req.level)
 
     # Notify telegram in the background
     action_str = "CREATED" if status == "new" else ("UPDATED" if status == "updated" else "EXISTS")
     status_emoji = "🔑" if status == "new" else ("🔄" if status == "updated" else "ℹ️")
 
-    msg = (
-        f"{status_emoji} <b>License Key {action_str}</b>\n"
-        f"• <b>Name</b>: <code>{record.name}</code>\n"
-        f"• <b>Product</b>: <code>{record.product}</code>\n"
-        f"• <b>Level</b>: <code>{record.level}</code>\n"
-        f"• <b>Expiry</b>: <code>{record.expires_at or 'Forever'}</code>"
-    )
+    def _field_line(label: str, field: str, current_val) -> str:
+        if field in changes:
+            old, new = changes[field]
+            return f"• <b>{label}</b>: <code>{old or 'Forever'}</code> → <code>{new or 'Forever'}</code>\n"
+        return f"• <b>{label}</b>: <code>{current_val or 'Forever'}</code>\n"
+
+    if status == "updated":
+        fields = (
+            _field_line("Product", "product", record.product)
+            + _field_line("Level", "level", record.level)
+            + _field_line("Expiry", "expires_at", record.expires_at)
+        )
+        msg = (
+            f"{status_emoji} <b>License Key {action_str}</b>\n"
+            f"• <b>Name</b>: <code>{record.name}</code>\n"
+            + fields.rstrip()
+        )
+    else:
+        msg = (
+            f"{status_emoji} <b>License Key {action_str}</b>\n"
+            f"• <b>Name</b>: <code>{record.name}</code>\n"
+            f"• <b>Product</b>: <code>{record.product}</code>\n"
+            f"• <b>Level</b>: <code>{record.level}</code>\n"
+            f"• <b>Expiry</b>: <code>{record.expires_at or 'Forever'}</code>"
+        )
     background_tasks.add_task(send_telegram_notification, msg)
 
     return {"status": status, "record": record.to_dict()}
@@ -165,6 +183,7 @@ async def admin_delete_key(req: AdminKeyDeleteRequest, background_tasks: Backgro
                 f"🗑️ <b>License Key DELETED</b>\n"
                 f"• <b>Name</b>: <code>{deleted_record.name}</code>\n"
                 f"• <b>Product</b>: <code>{deleted_record.product}</code>\n"
+                f"• <b>Level</b>: <code>{deleted_record.level}</code>\n"
                 f"• <b>Expiry</b>: <code>{deleted_record.expires_at or 'Forever'}</code>"
             )
         else:
@@ -192,6 +211,7 @@ async def admin_reset_key(req: AdminKeyResetRequest, background_tasks: Backgroun
         f"🔄 <b>License Key RESET</b>\n"
         f"• <b>Name</b>: <code>{record.name}</code>\n"
         f"• <b>Product</b>: <code>{record.product}</code>\n"
+        f"• <b>Level</b>: <code>{record.level}</code>\n"
         f"• <b>Status</b>: <code>Machine ID Cleared</code>"
     )
     background_tasks.add_task(send_telegram_notification, msg)

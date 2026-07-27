@@ -25,6 +25,7 @@ const btnCloseExtendModal = document.getElementById('btn-close-extend-modal');
 const extendKeyForm = document.getElementById('extend-key-form');
 const extendKeyNameInput = document.getElementById('extend-key-name');
 const extendKeyProductInput = document.getElementById('extend-key-product');
+const extendKeyLevelSelect = document.getElementById('extend-level-select');
 const extendDisplayName = document.getElementById('extend-display-name');
 const extendDisplayProduct = document.getElementById('extend-display-product');
 const btnExtendSubmit = document.getElementById('btn-extend-submit');
@@ -312,7 +313,7 @@ function renderKeys() {
                 <td data-label="Hành động" style="padding: 0.75rem; text-align: center;">
                     <div class="key-actions-cell">
                         <button class="btn-action btn-action-reset" data-action="reset" data-key-val="${escapeHtml(k.key)}" data-key-name="${escapeHtml(k.name)}" title="Reset máy khóa">Reset</button>
-                        <button class="btn-action btn-action-extend" data-action="extend" data-key-name="${escapeHtml(k.name)}" data-key-product="${escapeHtml(k.product)}" title="Gia hạn key">Gia hạn</button>
+                        <button class="btn-action btn-action-extend" data-action="extend" data-key-name="${escapeHtml(k.name)}" data-key-product="${escapeHtml(k.product)}" data-key-level="${escapeHtml(k.level || 'lite')}" title="Gia hạn key">Gia hạn</button>
                         <button class="btn-action btn-action-delete" data-action="delete" data-key-val="${escapeHtml(k.key)}" title="Xóa key">Xóa</button>
                     </div>
                 </td>
@@ -332,6 +333,7 @@ function renderKeys() {
             const keyVal = btn.dataset.keyVal;
             const keyName = btn.dataset.keyName;
             const keyProduct = btn.dataset.keyProduct;
+            const keyLevel = btn.dataset.keyLevel;
 
             if (action === 'delete') {
                 if (confirm(`Bạn có chắc chắn muốn xóa Key "${keyVal}" không?`)) {
@@ -342,7 +344,7 @@ function renderKeys() {
                     await resetKey(keyVal || keyName);
                 }
             } else if (action === 'extend') {
-                openExtendModal(keyName, keyProduct);
+                openExtendModal(keyName, keyProduct, keyLevel);
             }
         });
     });
@@ -409,9 +411,10 @@ async function deleteKey(key) {
 /**
  * Open Extend Modal
  */
-function openExtendModal(name, product) {
+function openExtendModal(name, product, level) {
     extendKeyNameInput.value = name;
     extendKeyProductInput.value = product;
+    extendKeyLevelSelect.value = level || 'lite';
     extendDisplayName.innerText = name;
     extendDisplayProduct.innerText = product === 'autohdr' ? 'AutoHDR' : 'Fotello';
     extendKeyModal.classList.add('is-active');
@@ -425,6 +428,7 @@ extendKeyForm.addEventListener('submit', async (e) => {
     const password = getStoredPassword();
     const name = extendKeyNameInput.value;
     const product = extendKeyProductInput.value;
+    const level = extendKeyLevelSelect.value;
     const expiryType = document.querySelector('input[name="extend-expiry"]:checked').value;
 
     let days = null;
@@ -441,6 +445,7 @@ extendKeyForm.addEventListener('submit', async (e) => {
         password,
         name,
         product,
+        level,
         forever: expiryType === 'forever',
         days: days
     };

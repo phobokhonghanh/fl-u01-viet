@@ -125,17 +125,29 @@ def add_or_update_key_by_name(
     records = load_keys(s3_key)
     for record in records:
         if record.name == name:
+            changes: dict = {}
+            if record.product != normalized_product:
+                changes["product"] = (record.product, normalized_product)
+            if record.level != normalized_level:
+                changes["level"] = (record.level, normalized_level)
+
             record.product = normalized_product
             record.level = normalized_level
+
             if not record.is_expired():
-                save_keys(s3_key, records)
-                return record, "valid"
+                if changes:
+                    save_keys(s3_key, records)
+                    return record, "updated", changes
+                return record, "valid", {}
             else:
+                old_expires = record.expires_at
                 record.expires_at = expires_at
                 record.is_active = True
+                if expires_at != old_expires:
+                    changes["expires_at"] = (old_expires, expires_at)
                 save_keys(s3_key, records)
-                return record, "updated"
-            
+                return record, "updated", changes
+
     new_key = random_key_string(10)
     new_record = KeyRecord(
         key=new_key,
@@ -147,7 +159,8 @@ def add_or_update_key_by_name(
     )
     records.append(new_record)
     save_keys(s3_key, records)
-    return new_record, "new"
+    return new_record, "new", {}
+
 
 def delete_key(s3_key: str, key_to_delete: str) -> bool:
     """Delete a key by its name or key value."""
