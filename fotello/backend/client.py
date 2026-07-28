@@ -92,7 +92,7 @@ def retry(fn: Callable[[], Any], max_retries: int = MAX_RETRIES) -> Any:
         except urllib.error.HTTPError as exc:
             print_system_exception(f"client.retry HTTPError attempt={attempt + 1}", exc)
             last_error = exc
-            if exc.code not in (429, 500, 502, 503, 504) or attempt == max_retries - 1:
+            if exc.code not in (400, 429, 500, 502, 503, 504) or attempt == max_retries - 1:
                 raise
             time.sleep(min(2**attempt, 30))
         except Exception as exc:
