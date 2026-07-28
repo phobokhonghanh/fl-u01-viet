@@ -55,9 +55,9 @@ jobs:
         if: runner.os != 'Windows'
         working-directory: ./autohdr_exe
         run: |
-          pyinstaller --onefile --noconsole --name AutoHDR_Client_macOS_${{ env.VERSION }} main.py
+          pyinstaller --windowed --name AutoHDR_Client_macOS_${{ env.VERSION }} main.py
           cd dist
-          zip -r "AutoHDR_Client_macOS_${{ env.VERSION }}.zip" "AutoHDR_Client_macOS_${{ env.VERSION }}"
+          ditto -c -k --sequesterRsrc --keepParent "AutoHDR_Client_macOS_${{ env.VERSION }}.app" "AutoHDR_Client_macOS_${{ env.VERSION }}.zip"
 
       - name: Lưu trữ Artifact Windows
         if: runner.os == 'Windows'
