@@ -223,13 +223,13 @@ def fotello_upload_and_enhance(
             enhance_id = enhance_result.get("id")
             if enhance_id:
                 enhance_ids.append(enhance_id)
-                firestore_patch(
-                    f"{FLD_ENHANCES}/{enhance_id}",
-                    {FLD_IS_WM: {FLD_BV: False}},
-                    access_token,
-                    [FLD_IS_WM],
-                    log=log,
-                )
+                # firestore_patch(
+                #     f"{FLD_ENHANCES}/{enhance_id}",
+                #     {FLD_IS_WM: {FLD_BV: False}},
+                #     access_token,
+                #     [FLD_IS_WM],
+                #     log=log,
+                # )
                 names = ", ".join(p.name for p in bracket)
                 log(f"Step 06: [{names}]", "success")
             done += 1
