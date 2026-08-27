@@ -120,8 +120,7 @@ jobs:
         working-directory: ./build/fotello_stage
         run: |
           pyinstaller \
-            --onefile \
-            --noconsole \
+            --windowed \
             --name Fotello_Client_macOS_${{ env.VERSION }} \
             --add-data "ui:ui" \
             --add-data "settings.json:." \
@@ -142,9 +141,10 @@ jobs:
             --hidden-import backend.service \
             --hidden-import pyarmor_runtime_000000 \
             --hidden-import webview \
+            --hidden-import webview.platforms.cocoa \
             main.py
           cd dist
-          zip -r "Fotello_Client_macOS_${{ env.VERSION }}.zip" "Fotello_Client_macOS_${{ env.VERSION }}"
+          ditto -c -k --sequesterRsrc --keepParent "Fotello_Client_macOS_${{ env.VERSION }}.app" "Fotello_Client_macOS_${{ env.VERSION }}.zip"
 
       - name: Lưu trữ Artifact Windows
         if: runner.os == 'Windows'

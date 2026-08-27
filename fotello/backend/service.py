@@ -133,7 +133,7 @@ def fotello_upload_and_enhance(
     max_workers = 8
     if not check_level_access(license_level, "plus"):
         time.sleep(2)
-        max_workers = 3
+        max_workers = 4
         if len(bracket_chunks) > 1:
             raise RuntimeError(
                 f"Giới hạn: 1 job xử lý tối đa {max_brackets_per_listing} brackets.\n"
@@ -148,8 +148,8 @@ def fotello_upload_and_enhance(
             return img_path, ""
         # log(f"  ↑ Đang tải lên {img_path.name}...", "info")
         log(f"Step 02: Đang tải lên - {img_path.name}", "info")
-        if not check_level_access(license_level, "plus"):
-            time.sleep(1)
+        # if not check_level_access(license_level, "plus"):
+        #     time.sleep(1)
         upload_id = upload_image_resumable(img_path, id_token, str(team_id))
         return img_path, upload_id
 

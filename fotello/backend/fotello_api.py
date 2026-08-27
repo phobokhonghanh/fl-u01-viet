@@ -54,7 +54,8 @@ def upload_image_resumable(filepath: Path, id_token: str, team_id: str) -> str:
     start_url += urllib.parse.quote(object_name, safe="")
 
     def _start():
-        start_body = json.dumps({"contentType": content_type}).encode()
+        start_body = json.dumps({"contentType": content_type, "name": object_name}).encode()
+
         start_req = urllib.request.Request(
             start_url,
             data=start_body,
@@ -68,9 +69,10 @@ def upload_image_resumable(filepath: Path, id_token: str, team_id: str) -> str:
                 "Authorization": "Firebase " + id_token,
             },
         )
-        return open_checked(start_req, 15)
+        return open_checked(start_req, 25)
 
     resp = retry(_start)
+    # print('ok')
     upload_url = resp.headers.get("x-goog-upload-url") or resp.headers.get("X-Goog-Upload-URL")
     if not upload_url:
         raise RuntimeError("Resumable start didn't return upload URL")
