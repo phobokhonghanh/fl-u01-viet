@@ -5,7 +5,7 @@ import base64
 
 _XOR_KEY = b"Ft2026Obf"
 
-CLIENT_VERSION = "2.1"
+CLIENT_VERSION = "2.2"
 
 
 def _dec(blob: str) -> str:
