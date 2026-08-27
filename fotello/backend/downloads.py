@@ -158,12 +158,20 @@ def fotello_list_enhances_for_listing(listing_id: str, log: LogFn = None) -> lis
         status = fields.get(FLD_STATUS, {}).get(FLD_SV, "unknown")
         has_upsized = bool(fields.get(FLD_EDITED_UPSIZED, {}).get(FLD_SV, ""))
         has_edited = bool(fields.get(FLD_EDITED, {}).get(FLD_SV, ""))
+        input_filenames_val = fields.get("inputFilenames", {}).get("arrayValue", {}).get("values", [])
+        original_filename = ""
+        if input_filenames_val and isinstance(input_filenames_val, list):
+            first_val = input_filenames_val[0]
+            if isinstance(first_val, dict):
+                original_filename = first_val.get("stringValue") or first_val.get(FLD_SV) or ""
+
         enhances.append(
             {
                 "id": enhance_id,
                 "status": status,
                 "has_image": has_edited or has_upsized,
                 "upsized": has_upsized,
+                "filename": original_filename,
             }
         )
     return enhances
@@ -281,25 +289,25 @@ def fotello_download_listing(
     if enhance_ids is None:
         log(f"Step 03: Kiểm tra thông tin listing={listing_id}", "info")
         enhances = fotello_list_enhances_for_listing(listing_id, log)
-        successful = [e['id'] for e in enhances if e["has_image"]]
+        successful = [e for e in enhances if e["has_image"]]
         log(f"Step 03: Tìm thấy {len(successful)} enhances có ảnh.", "info")
     else:
-        successful = enhance_ids
-        
+        successful = [{"id": str(e), "filename": ""} if isinstance(e, str) else e for e in enhance_ids]
+
     if not successful:
         raise RuntimeError("Không tìm thấy enhances có ảnh")
 
-    for enh in successful:
-        if is_cancelled():
-            return []
-        log(f"Step 04: Xử lý ảnh watermark: enhance={enh}", "info")
-        firestore_patch(
-            f"{FLD_ENHANCES}/{enh}",
-            {FLD_IS_WM: {FLD_BV: False}},
-            access_token,
-            [FLD_IS_WM],
-            log=log,
-        )
+    # for enh in successful:
+    #     if is_cancelled():
+    #         return []
+    #     log(f"Step 04: Xử lý ảnh watermark: enhance={enh}", "info")
+    #     firestore_patch(
+    #         f"{FLD_ENHANCES}/{enh}",
+    #         {FLD_IS_WM: {FLD_BV: False}},
+    #         access_token,
+    #         [FLD_IS_WM],
+    #         log=log,
+    #     )
 
     results: list[str] = []
     try:
@@ -332,8 +340,12 @@ def fotello_download_listing(
 
     # log("[DL-08] Fallback tải từng enhance", "warn")
     log("Step 07: Tải dự phòng theo từng mục.", "warn")
-    for enh in successful:
-        path = download_single_enhance(str(enh), access_token, out_dir, log=log, is_cancelled=is_cancelled)
+    for item in successful:
+        if is_cancelled():
+            return results
+        enh_id = item["id"] if isinstance(item, dict) else str(item)
+        src_name = item.get("filename") if isinstance(item, dict) else None
+        path = download_single_enhance(enh_id, access_token, out_dir, src_name=src_name, log=log, is_cancelled=is_cancelled)
         if path:
             results.append(str(path))
     return results
