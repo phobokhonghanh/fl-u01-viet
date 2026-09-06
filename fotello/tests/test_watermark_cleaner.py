@@ -300,6 +300,8 @@ class TestWatermarkCleaner(unittest.TestCase):
 
     def test_batch_cli_execution(self) -> None:
         """Test CLI batch execution on test_wm with overrides and exit code."""
+        if not Path("test_wm").exists():
+            self.skipTest("Fixture test_wm not found")
         out_dir = self.temp_dir / "cli_out"
         code = cli_main([
             "test_wm",

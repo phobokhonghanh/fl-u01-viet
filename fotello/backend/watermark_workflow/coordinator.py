@@ -1,6 +1,7 @@
 """Automatic variant generation with immutable source groups and selective retries."""
 from __future__ import annotations
 
+import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -124,7 +125,7 @@ def run_auto(manifest, *, upload, create_listing, create_enhance, check_ready,
                        "status": "submission_unknown"}
             attempt["listings"].append(listing)
             checkpoint()
-            log(f"Step 04: Tạo listing lượt {number:02d} đợt {chunk_number}/{total_chunks}: {name}", "info")
+            log(f"Step 04: Tạo listing lượt {number:02d} đợt {chunk_number}/{total_chunks}", "info")
             try:
                 listing_id = create_listing(name, chunk)
                 if not listing_id:
@@ -181,8 +182,7 @@ def run_auto(manifest, *, upload, create_listing, create_enhance, check_ready,
                     if not check_ready(enhance_id):
                         continue
                     raw_dir = (Path(manifest["output_dir"]) / "raw" /
-                               f'{manifest["prefix"]}{attempt["number"]:02d}' /
-                               f'part{listing["chunk"]:02d}')
+                               f'{manifest["prefix"]}{attempt["number"]:02d}')
                     raw_dir.mkdir(parents=True, exist_ok=True)
                     raw_name = Path(group["output_name"]).stem + ".jpg"
                     log(f"Step 08: Đang tải biến thể - {raw_name} ({group.get('rendition') or 'edited'})", "info")
@@ -252,6 +252,8 @@ def run_auto(manifest, *, upload, create_listing, create_enhance, check_ready,
         if cancelled():
             manifest["status"] = "stopped"
         checkpoint()
+        shutil.rmtree(Path(manifest["output_dir"]) / "attempts", ignore_errors=True)
+        shutil.rmtree(Path(manifest["output_dir"]) / "reports", ignore_errors=True)
     summary_result = summary(manifest)
     if summary_result.get("status") == "success":
         log(f"Hoàn tất: Đã làm sạch watermark toàn bộ {summary_result['cleaned_count']}/{summary_result['target_count']} ảnh.", "success")

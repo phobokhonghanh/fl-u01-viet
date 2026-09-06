@@ -553,8 +553,8 @@ def compare_variant_pair(
                 sources = list(info.get("watermarked_sources", []) or [])
                 conf = float(info.get("confidence") or 0.0)
                 status = info.get("status")
-                # Filter out low-confidence noise from detector
-                if sources and (status == "resolved" or conf >= 0.05):
+                # Filter out low-confidence noise from detector (< 10%)
+                if sources and (status == "resolved" or conf >= 0.10):
                     detector_corners += 1
                     detector_corner_names.add(corner_name)
                     detector_sources.extend(sources)
@@ -775,18 +775,16 @@ def _existing_clean_result(
 ) -> dict[str, Any] | None:
     """Return a stable result when a prior clean output already exists."""
 
-    if not output_path.is_file() or not report_path.is_file():
+    if not output_path.is_file():
         return None
-    try:
-        report = json.loads(report_path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    if not isinstance(report, dict):
-        return None
-    if str(report.get("output_id", "")) != str(output_id):
-        return None
-    if report.get("status") != _STATUS_CLEANED:
-        return None
+    if report_path.is_file():
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            if isinstance(report, dict):
+                if str(report.get("output_id", "")) != str(output_id) or report.get("status") != _STATUS_CLEANED:
+                    return None
+        except Exception:
+            return None
     try:
         with Image.open(output_path) as image:
             image.verify()

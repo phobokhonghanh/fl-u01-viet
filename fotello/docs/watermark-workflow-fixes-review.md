@@ -98,5 +98,49 @@ All reported defects and review feedback from the user and Codex have been resol
 
 1. **No Live External API Calls**: All tests used injected fake/mock providers. No real listings or enhance jobs were submitted to live Fotello servers.
 2. **Timezone Roundtrip Integrity**: UTC ISO (`2026-09-06T06:30:00+00:00`) translates to Vietnam time (`06 09, 2026 13:30`), which parses back with a timestamp difference of exactly 0.0 seconds regardless of system timezone.
+
+---
+
+## 7. Directory Structure & Cleanup Fixes (WF1 & WF2)
+
+### 7.1 WF1 Raw Path Redundancy (`part01` Removal)
+- **Issue**: In WF1 (`coordinator.py`), downloaded raw photos were saved to `raw/<prefix><attempt>/part01/<filename>.jpg`. The extra `part01` nested folder was redundant.
+- **Fix**: Changed `raw_dir` to `Path(manifest["output_dir"]) / "raw" / f'{manifest["prefix"]}{attempt["number"]:02d}'`. Files are now saved directly into `raw/<prefix><attempt>/<filename>.jpg`.
+
+### 7.2 WF1 & WF2 Intermediate Directory Cleanup (`attempts/` and `reports/`)
+- **Issue**: During processing, `clean_output` creates temporary directories `attempts/` (containing intermediate attempt logs/images) and `reports/` (containing individual JSON reports). These directories were left behind after workflow completion, cluttering user folders.
+- **Fix**:
+  - In `coordinator.py`: Added automatic cleanup (`shutil.rmtree`) of `attempts/` and `reports/` at the end of `run_auto`.
+  - In `manual.py`: Added automatic cleanup (`shutil.rmtree`) of `attempts/` and `reports/` across all target directories at the end of `download_manual_workflow`.
+  - In `cleaner.py`: Updated `_existing_clean_result` so that existing cleaned output images remain verified and preserved via PIL even after `reports/` is cleaned up.
+
+### 7.3 WF2 Output Path Redundant UUID Removal
+- **Issue**: In WF2 (`manual.py`), `_destination_for_manifest` and `_new_manifest` appended `sanitize_prefix(family_id)` (e.g. `/0dd7db08/9c6f5d92-d70e-4b1f-8df8-7eebd907cead/clean`), creating an unsightly and redundant UUID directory inside the user's chosen download directory.
+- **Fix**: Updated `_destination_for_manifest` and manifest creation: when downloading a single family (or specific job destination), output is written directly to `requested_root` (e.g. `/0dd7db08/clean`). UUID subfolders are only used when multiple distinct families are mixed in the same manual batch job.
+
+### 7.4 WF2 Missing `raw/` Directory & `part01` Removal
+- **Issue**: In WF2, when cloning from an existing manifest, `group["variants"]` retained paths pointing to the source directory. The download loop skipped downloading them because the source files existed, but never copied them into the new download folder, leaving the manual download directory without a `raw/` folder. Furthermore, newly downloaded variants in WF2 still used the redundant `part01` subfolder.
+- **Fix**:
+  - Implemented `_sync_raw_files_to_destination(manifest, destination)` in `manual.py`, ensuring all existing raw variants are copied locally to `destination / "raw" / <attempt_label> / <raw_name>` and manifest paths are updated to point to the destination folder.
+  - In the download loop, ensured existing variants outside `destination/raw` are synced, and new downloads save to `destination / "raw" / <attempt_label>` without any `part01` subfolder.
+
+---
+
+---
+
+## 8. Verification Results for Directory Structure & Cleanup
+- Added `TestDirectoryStructureAndCleanup` in `tests/test_watermark_fixes.py`:
+  - `test_wf1_raw_has_no_part01_and_attempts_reports_cleaned`: Passed.
+  - `test_wf2_single_family_has_no_uuid_and_raw_synced_without_part01`: Passed.
+- Full test suite: `rtk proxy .venv/bin/python -m unittest discover -s tests -v`:
+  - **76 tests passed (0 failures, 0 errors, 5 skipped external fixtures)**.
+
+---
+
+## 9. Detector Noise Threshold Adjustment (5% -> 10%)
+- **Issue**: Corners with marginal noise differences (e.g. 5.14% confidence, 0 significant pixels in `groups`) were being recognized as a 3rd watermarked corner, causing pairs with 2 clearly distinct watermarks (e.g. TL 87% vs BR 31%) to fall into `uncertain` / retry loop.
+- **Fix**: Adjusted the noise filtering threshold in `backend/watermark_workflow/cleaner.py` from 5% (`conf >= 0.05`) to 10% (`conf >= 0.10`). Low-confidence edge noise under 10% is safely ignored, allowing distinct pairs to be recognized and cleaned on the earliest valid attempt without affecting the core cleaner pipeline.
+- **Verification**: Evaluated on actual artifacts (`IMG_9947` in `aa97e8cc`): `compare_variant_pair` immediately resolves `done01` vs `done02` as `status: distinct` with `['BR', 'TL']`. All 76 automated tests pass cleanly.
+
 3. **Backward Compatibility**: `parse_attempt_name(name, full=False)` maintains its exact 4-key return signature (`family_id`, `attempt`, `chunk`, `prefix`) for existing callers while enabling full UI enrichment when `full=True`.
 4. **Workspace Integrity**: No uncommitted working files were reset or destroyed.

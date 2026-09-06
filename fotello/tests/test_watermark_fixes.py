@@ -11,6 +11,8 @@ Validates:
 
 from __future__ import annotations
 
+import os
+import shutil
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -328,6 +330,159 @@ class TestListingDownloadTimezoneAndFallback(unittest.TestCase):
             self.assertEqual(len(listings), 1)
             item = listings[0]
             self.assertEqual(item["created_at"], "-")
+
+
+class TestDirectoryStructureAndCleanup(unittest.TestCase):
+    """Test raw directory structure (no part01), cleanup of attempts/reports, and UUID avoidance."""
+
+    def setUp(self) -> None:
+        self.temp_dir = Path(tempfile.mkdtemp(prefix="dir_clean_test_"))
+        self.state_dir = self.temp_dir / "state"
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+        self.prev_state = os.environ.get("FOTELLO_WORKFLOW_STATE_DIR")
+        os.environ["FOTELLO_WORKFLOW_STATE_DIR"] = str(self.state_dir)
+
+    def tearDown(self) -> None:
+        if self.prev_state is None:
+            os.environ.pop("FOTELLO_WORKFLOW_STATE_DIR", None)
+        else:
+            os.environ["FOTELLO_WORKFLOW_STATE_DIR"] = self.prev_state
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_wf1_raw_has_no_part01_and_attempts_reports_cleaned(self) -> None:
+        from backend.watermark_workflow.coordinator import run_auto
+        from backend.watermark_workflow.models import build_groups, new_manifest
+
+        input_dir = self.temp_dir / "inputs"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        in_path = input_dir / "img01.jpg"
+        in_path.write_bytes(b"image")
+
+        output_dir = self.temp_dir / "wf1_out"
+        groups = build_groups([in_path], 1)
+        manifest = new_manifest(groups, {"bracket_size": 1}, "team-1", "abc", str(output_dir))
+
+        downloaded_raw_dirs: list[Path] = []
+
+        def fake_download(enhance_id, raw_dir, raw_name, rendition=None):
+            downloaded_raw_dirs.append(Path(raw_dir))
+            path = Path(raw_dir) / raw_name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"variant")
+            return {"path": path, "rendition": "edited"}
+
+        def fake_clean(output_id, output_name, variants, out_dir, is_cancelled=None):
+            # simulate cleaner creating attempts and reports
+            (Path(out_dir) / "attempts" / output_id).mkdir(parents=True, exist_ok=True)
+            (Path(out_dir) / "reports").mkdir(parents=True, exist_ok=True)
+            (Path(out_dir) / "reports" / f"{Path(output_name).stem}.json").write_text("{}", encoding="utf-8")
+            clean_file = Path(out_dir) / "clean" / output_name
+            clean_file.parent.mkdir(parents=True, exist_ok=True)
+            clean_file.write_bytes(b"cleaned")
+            return {"status": "cleaned", "output_path": str(clean_file)}
+
+        result = run_auto(
+            manifest,
+            upload=lambda path: "upl-1",
+            create_listing=lambda name, chunk: "lst-1",
+            create_enhance=lambda listing_id, outputs: [{"enhance_id": "enh-1", "output_id": "img0001"}],
+            check_ready=lambda eid: True,
+            download=fake_download,
+            clean=fake_clean,
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(len(downloaded_raw_dirs) >= 1)
+        # raw_dir must be raw/abc01 without part01
+        for d in downloaded_raw_dirs:
+            self.assertNotIn("part", str(d))
+            self.assertTrue(str(d).endswith("raw/abc01") or str(d).endswith("raw/abc02"))
+
+        # attempts and reports must be cleaned up
+        self.assertFalse((output_dir / "attempts").exists())
+        self.assertFalse((output_dir / "reports").exists())
+        # clean and raw must exist
+        self.assertTrue((output_dir / "clean").exists())
+        self.assertTrue((output_dir / "raw").exists())
+
+    def test_wf2_single_family_has_no_uuid_and_raw_synced_without_part01(self) -> None:
+        from backend.watermark_workflow.manual import download_manual_workflow
+        from backend.watermark_workflow.models import new_manifest, build_groups
+        from backend.watermark_workflow.store import ManifestStore
+        from unittest.mock import patch
+
+        source_root = self.temp_dir / "wf1_source"
+        source_raw = source_root / "raw" / "abc01" / "img01.jpg"
+        source_raw.parent.mkdir(parents=True, exist_ok=True)
+        source_raw.write_bytes(b"variant1")
+
+        groups = [
+            {
+                "output_id": "img0001",
+                "output_name": "img01.png",
+                "input_paths": [str(source_raw)],
+                "input_filenames": ["img01.jpg"],
+                "input_fingerprints": {},
+                "status": "need_variant",
+                "variants": [
+                    {"enhance_id": "enh-1", "attempt": 1, "path": str(source_raw), "rendition": "edited"}
+                ],
+            }
+        ]
+        manifest = {
+            "family_id": "9c6f5d92-d70e-4b1f-8df8-7eebd907cead",
+            "team_id": "team-1",
+            "prefix": "abc",
+            "output_dir": str(source_root),
+            "groups": groups,
+            "attempts": [
+                {
+                    "number": 1,
+                    "listings": [
+                        {
+                            "listing_id": "lst-1",
+                            "chunk": 1,
+                            "enhances": [
+                                {"enhance_id": "enh-1", "output_id": "img0001", "name": "img01.jpg"}
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        ManifestStore(source_root).save(manifest)
+
+        dest_root = self.temp_dir / "0dd7db08"
+        clean_dirs: list[Path] = []
+
+        def fake_clean(output_id, output_name, variants, out_dir, is_cancelled=None):
+            clean_dirs.append(Path(out_dir))
+            (Path(out_dir) / "attempts").mkdir(parents=True, exist_ok=True)
+            (Path(out_dir) / "reports").mkdir(parents=True, exist_ok=True)
+            clean_file = Path(out_dir) / "clean" / output_name
+            clean_file.parent.mkdir(parents=True, exist_ok=True)
+            clean_file.write_bytes(b"clean")
+            return {"status": "cleaned", "output_path": str(clean_file)}
+
+        with patch("backend.watermark_workflow.manual.fotello_list_enhances_for_listing", return_value=[{"enhance_id": "enh-1", "id": "enh-1", "name": "img01.jpg"}]), \
+             patch("backend.watermark_workflow.manual.clean_output", side_effect=fake_clean):
+            res = download_manual_workflow(["lst-1"], dest_root, team_id="team-1")
+
+        # Destination must be dest_root directly, NOT dest_root / <uuid>
+        self.assertEqual(clean_dirs[0], dest_root)
+        uuid_dir = dest_root / "9c6f5d92-d70e-4b1f-8df8-7eebd907cead"
+        self.assertFalse(uuid_dir.exists())
+
+        # dest_root must contain clean/ and raw/ directly
+        self.assertTrue((dest_root / "clean").exists())
+        self.assertTrue((dest_root / "raw").exists())
+        # raw must contain abc01 without part01
+        self.assertTrue((dest_root / "raw" / "abc01" / "img01.jpg").exists())
+        self.assertFalse((dest_root / "raw" / "abc01" / "part01").exists())
+
+        # attempts and reports must be cleaned up
+        self.assertFalse((dest_root / "attempts").exists())
+        self.assertFalse((dest_root / "reports").exists())
 
 
 if __name__ == '__main__':

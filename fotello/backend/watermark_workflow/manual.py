@@ -7,6 +7,7 @@ only mapped variants to the shared cleaner adapter.
 
 from __future__ import annotations
 
+import shutil
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
@@ -136,7 +137,11 @@ def _new_manifest(
     }
 
 
-def _destination_for_manifest(manifest: Mapping[str, Any], requested_root: Path) -> Path:
+def _destination_for_manifest(
+    manifest: Mapping[str, Any],
+    requested_root: Path,
+    multi_family: bool = False,
+) -> Path:
     """Choose the manual output folder while retaining the full manifest."""
 
     family_id = str(manifest.get("family_id") or "family")
@@ -150,7 +155,66 @@ def _destination_for_manifest(manifest: Mapping[str, Any], requested_root: Path)
         return requested_root
     if requested_root.name == family_id:
         return requested_root
-    return requested_root / sanitize_prefix(family_id)
+    if multi_family:
+        return requested_root / sanitize_prefix(family_id)
+    return requested_root
+
+
+def _sync_raw_files_to_destination(manifest: dict[str, Any], destination: Path) -> None:
+    """Ensure all existing downloaded variants are copied to destination/raw and paths updated."""
+    prefix = str(manifest.get("prefix") or "listing")
+    groups = manifest.get("groups", [])
+    if not isinstance(groups, list):
+        return
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        output_name = str(group.get("output_name") or group.get("output_id") or "output")
+        raw_name = Path(output_name).stem + ".jpg"
+        variants = group.get("variants", [])
+        if not isinstance(variants, list):
+            continue
+        for variant in variants:
+            if not isinstance(variant, dict):
+                continue
+            src_path_str = variant.get("path")
+            if not src_path_str:
+                continue
+            src_path = Path(src_path_str)
+            if not src_path.is_file():
+                continue
+            attempt_num = variant.get("attempt")
+            if attempt_num is not None:
+                try:
+                    attempt_label = f"{prefix}{int(attempt_num):02d}"
+                except (ValueError, TypeError):
+                    attempt_label = f"{prefix}_{attempt_num}"
+            else:
+                listing_id = variant.get("listing_id")
+                matched_attempt = None
+                if listing_id:
+                    for att in manifest.get("attempts", []):
+                        if any(str(lst.get("listing_id")) == str(listing_id) for lst in att.get("listings", [])):
+                            matched_attempt = att.get("number")
+                            break
+                if matched_attempt is not None:
+                    attempt_label = f"{prefix}{int(matched_attempt):02d}"
+                else:
+                    p_name = src_path.parent.name
+                    if p_name.startswith("part"):
+                        attempt_label = src_path.parent.parent.name
+                    else:
+                        attempt_label = p_name if p_name != "raw" else f"{prefix}01"
+            dest_raw_dir = destination / "raw" / attempt_label
+            dest_file = dest_raw_dir / raw_name
+            try:
+                if src_path.resolve() != dest_file.resolve():
+                    dest_raw_dir.mkdir(parents=True, exist_ok=True)
+                    if not dest_file.is_file() or dest_file.stat().st_size == 0:
+                        shutil.copy2(src_path, dest_file)
+                    variant["path"] = str(dest_file)
+            except OSError:
+                pass
 
 
 def _clone_for_destination(source: Mapping[str, Any], destination: Path) -> dict[str, Any]:
@@ -170,6 +234,7 @@ def _clone_for_destination(source: Mapping[str, Any], destination: Path) -> dict
         group["report_path"] = None
     manifest["cloned_from"] = str(source.get("output_dir") or "")
     manifest["updated_at"] = _now()
+    _sync_raw_files_to_destination(manifest, destination)
     return manifest
 
 
@@ -347,6 +412,16 @@ def download_manual_workflow(
             rows = []
         listing_rows = [row for row in rows if isinstance(row, Mapping)]
 
+    family_ids: set[str] = set()
+    for listing_id in selected:
+        source = source_by_listing.get(listing_id)
+        if source:
+            family_ids.add(str(source.get("family_id") or f"family-{listing_id}"))
+        else:
+            meta = _listing_meta(listing_id, listing_rows)
+            family_ids.add(str(meta.get("family_id") or f"legacy-{listing_id}"))
+    multi_family = len(family_ids) > 1
+
     manifests: dict[str, dict[str, Any]] = {}
     manifest_for_listing: dict[str, dict[str, Any]] = {}
     for listing_id in selected:
@@ -354,15 +429,16 @@ def download_manual_workflow(
         if source:
             family_id = str(source.get("family_id") or f"family-{listing_id}")
             if family_id not in manifests:
-                destination = _destination_for_manifest(source, root)
+                destination = _destination_for_manifest(source, root, multi_family=multi_family)
                 manifests[family_id] = _clone_for_destination(source, destination)
             manifest_for_listing[listing_id] = manifests[family_id]
             continue
         meta = _listing_meta(listing_id, listing_rows)
         family_id = str(meta.get("family_id") or f"legacy-{listing_id}")
         if family_id not in manifests:
+            dest_dir = root / sanitize_prefix(family_id) if multi_family else root
             manifests[family_id] = _new_manifest(
-                root / sanitize_prefix(family_id),
+                dest_dir,
                 family_id,
                 str(meta.get("prefix") or "legacy"),
                 team_id,
@@ -485,24 +561,32 @@ def download_manual_workflow(
                 ),
                 None,
             )
-            if existing:
-                continue
-            if not access_token:
-                group["status"] = "blocked"
-                group["reason"] = "Không có access token để tải enhance"
-                continue
             attempt_label = (
                 f"{manifest.get('prefix') or 'listing'}{attempt_number:02d}"
                 if attempt_number
                 else f"listing_{listing_id[:8]}"
             )
-            chunk_label = int(chunk_number) if chunk_number is not None else 1
             raw_dir = (
                 Path(str(manifest.get("output_dir") or root))
                 / "raw"
                 / attempt_label
-                / f"part{chunk_label:02d}"
             )
+            raw_name = Path(str(group.get("output_name") or output_id)).stem + ".jpg"
+            if existing:
+                try:
+                    dest_file = raw_dir / raw_name
+                    if Path(str(existing["path"])).resolve() != dest_file.resolve():
+                        raw_dir.mkdir(parents=True, exist_ok=True)
+                        if not dest_file.is_file() or dest_file.stat().st_size == 0:
+                            shutil.copy2(str(existing["path"]), dest_file)
+                        existing["path"] = str(dest_file)
+                except OSError:
+                    pass
+                continue
+            if not access_token:
+                group["status"] = "blocked"
+                group["reason"] = "Không có access token để tải enhance"
+                continue
             forced_rendition = next(
                 (
                     str(variant.get("rendition"))
@@ -511,7 +595,6 @@ def download_manual_workflow(
                 ),
                 group.get("rendition"),
             )
-            raw_name = Path(str(group.get("output_name") or output_id)).stem + ".jpg"
             try:
                 result = download_variant(
                     enhance_id,
@@ -594,6 +677,13 @@ def download_manual_workflow(
         for manifest in manifests.values():
             manifest["status"] = "stopped"
             ManifestStore(Path(str(manifest.get("output_dir") or root))).save(manifest)
+
+    for manifest in manifests.values():
+        out_dir = Path(str(manifest.get("output_dir") or root))
+        shutil.rmtree(out_dir / "attempts", ignore_errors=True)
+        shutil.rmtree(out_dir / "reports", ignore_errors=True)
+    shutil.rmtree(root / "attempts", ignore_errors=True)
+    shutil.rmtree(root / "reports", ignore_errors=True)
 
     result = _summary_many(list(manifests.values()), root)
     if summary_fn:
