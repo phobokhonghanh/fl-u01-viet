@@ -207,6 +207,11 @@ button.danger {
     color: var(--accent);
 }
 
+.job-item-status.partial,
+.job-item-status.stopped {
+    color: var(--orange);
+}
+
 .job-item-status.failed {
     color: var(--red);
 }
@@ -340,6 +345,36 @@ button.danger {
     color: var(--muted);
 }
 
+.listing-family-group {
+    margin-bottom: 8px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.listing-family-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    background: rgba(255,255,255,0.035);
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.listing-family-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.listing-family-select {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
 .listing-item {
     display: grid;
     grid-template-columns: 28px 1fr 110px 130px;
@@ -348,6 +383,10 @@ button.danger {
     padding: 8px;
     border-bottom: 1px solid rgba(255,255,255,0.04);
     color: var(--muted);
+}
+
+.listing-family-group .listing-item:last-child {
+    border-bottom: 0;
 }
 
 .listing-name {
@@ -378,6 +417,17 @@ button.danger {
 .field-note-danger {
     color: var(--red);
     font-size: 12px;
+}
+
+.field-note,
+.workflow-note {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.workflow-note {
+    margin: 9px 0 0;
 }
 
 label {

@@ -10,7 +10,7 @@ from .client import json_request, open_checked, print_system_exception, request_
 from .constants import CONTENT_TYPES, EP_CREATE_UPLOAD, FOTELLO_API
 
 
-def api_post(endpoint: str, body: dict[str, Any], id_token: str) -> dict[str, Any]:
+def api_post(endpoint: str, body: dict[str, Any], id_token: str, *, retry_requests: bool = True) -> dict[str, Any]:
     data = json.dumps(body).encode()
 
     def _do() -> dict[str, Any]:
@@ -28,7 +28,9 @@ def api_post(endpoint: str, body: dict[str, Any], id_token: str) -> dict[str, An
         return json_request(req, 15)
 
     try:
-        return retry(_do)
+        # Resource creation may already have succeeded when a response times out.
+        # Workflow callers checkpoint and reconcile instead of blindly creating twice.
+        return retry(_do) if retry_requests else _do()
     except Exception as exc:
         print_system_exception(f"fotello_api.api_post endpoint={endpoint}", exc)
         logger = request_logger()

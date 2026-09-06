@@ -113,7 +113,7 @@ function bindFolderPersistence() {
 }
 
 function escapeHtml(value) {
-    return String(value || '').replace(/[&<>"']/g, char => ({
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
         '&': '&amp;',
         '<': '&lt;',
         '>': '&gt;',
@@ -123,8 +123,23 @@ function escapeHtml(value) {
 }
 
 function normalizeJob(job) {
+    if (!job || !job.job_id) return null;
     const existing = fotelloJobs[job.job_id] || {};
     fotelloJobs[job.job_id] = {
+        total_count: 0,
+        done_count: 0,
+        uploaded_count: 0,
+        downloaded_count: 0,
+        raw_downloaded_count: 0,
+        target_count: 0,
+        cleaned_count: 0,
+        pending_count: 0,
+        preview_count: 0,
+        failed_count: 0,
+        attempt: 0,
+        family_id: '',
+        manifest_path: '',
+        output_path: '',
         logs: existing.logs || [],
         ...existing,
         ...job,
@@ -138,6 +153,7 @@ function jobStatusText(status) {
         pending: 'Chờ chạy',
         running: 'Đang chạy',
         success: 'Thành công',
+        partial: 'Hoàn tất một phần',
         failed: 'Thất bại',
         stopped: 'Đã dừng'
     }[status] || status || 'Không rõ';
@@ -155,15 +171,28 @@ function renderJobs() {
     list.innerHTML = jobs.map(job => {
         const active = job.job_id === selectedJobId ? ' active' : '';
         const done = Number(job.done_count || 0);
+        const total = Number(job.total_count || 0);
+        const target = Number(job.target_count || 0);
+        const cleaned = Number(job.cleaned_count || 0);
+        const pending = Number(job.pending_count || 0);
+        const rawDownloaded = Number(job.raw_downloaded_count || job.downloaded_count || 0);
         const uploaded = Number(job.uploaded_count || 0);
-        const downloaded = Number(job.downloaded_count || 0);
-        const leftCount = job.type === 'upload' ? uploaded : done;
-        const countText = `${leftCount}/${downloaded}`;
-        const folderButton = job.status === 'success' && job.output_path
-            ? `<button class="job-folder-btn" onclick="fotelloOpenJobFolder(event, '${job.job_id}')">📂</button>`
+        const workText = target > 0
+            ? `Sạch ${cleaned}/${target}`
+            : (job.type === 'upload' ? `Upload ${uploaded}/${total || uploaded}` : `Xử lý ${done}/${total}`);
+        const rawText = `Bản tải ${rawDownloaded}`;
+        const roundText = Number(job.attempt || 0) > 0 ? `Lượt ${Number(job.attempt)}` : '';
+        const pendingText = pending > 0 ? `Chờ ${pending}` : '';
+        const reviewText = Number(job.preview_count || 0) > 0 ? `Cần kiểm tra ${Number(job.preview_count)}` : '';
+        const failedText = Number(job.failed_count || 0) > 0 ? `Lỗi ${Number(job.failed_count)}` : '';
+        const unresolvedText = Number(job.unresolved_count || 0) > 0 ? `Chưa đối chiếu ${Number(job.unresolved_count)}` : '';
+        const countText = [workText, rawText, roundText, pendingText, reviewText, failedText, unresolvedText].filter(Boolean).join(' · ');
+        const canOpenFolder = ['success', 'partial', 'stopped', 'failed'].includes(job.status);
+        const folderButton = canOpenFolder && job.output_path
+            ? `<button type="button" class="job-folder-btn" data-job-id="${escapeHtml(job.job_id)}" title="Mở thư mục output">📂</button>`
             : '';
         return `
-            <div class="job-item${active}" onclick="selectJob('${job.job_id}')">
+            <div class="job-item${active}" data-job-id="${escapeHtml(job.job_id)}">
                 <div class="job-main">
                     <strong class="job-item-id">#${escapeHtml(job.job_id)}</strong>
                     <span class="job-item-name" title="${escapeHtml(job.name)}">${escapeHtml(job.name)}</span>
@@ -176,6 +205,15 @@ function renderJobs() {
             </div>
         `;
     }).join('');
+    list.querySelectorAll('.job-item').forEach(item => {
+        item.addEventListener('click', () => selectJob(item.dataset.jobId));
+    });
+    list.querySelectorAll('.job-folder-btn').forEach(button => {
+        button.addEventListener('click', event => {
+            event.stopPropagation();
+            fotelloOpenJobFolder(event, button.dataset.jobId);
+        });
+    });
 }
 
 function renderLogBox() {
@@ -374,19 +412,92 @@ function fotelloRenderListings() {
         container.innerHTML = '<div class="empty">Không có listings nào</div>';
         return;
     }
-    container.innerHTML = fotelloListingsData.map(listing => `
-        <label class="listing-item">
-            <input type="checkbox" class="fotello-listing-cb" data-id="${listing.id}">
-            <span class="listing-name">${listing.name}</span>
-            <span>${listing.brackets || 0} brackets</span>
-            <span>${listing.created_at || ''}</span>
-        </label>
-    `).join('');
+    const groups = new Map();
+    fotelloListingsData.forEach((listing, index) => {
+        const familyId = String(listing.family_id ?? '').trim();
+        // Listings without a family ID are intentionally kept separate. A
+        // shared prefix alone is not proof that two remote listings belong to
+        // the same watermark workflow.
+        const key = familyId ? `family:${familyId}` : `listing:${listing.id || index}`;
+        if (!groups.has(key)) {
+            groups.set(key, { familyId, listings: [] });
+        }
+        groups.get(key).listings.push(listing);
+    });
+
+    container.innerHTML = Array.from(groups.values()).map(group => {
+        const familyId = group.familyId;
+        const first = group.listings[0] || {};
+        const familyLabel = familyId
+            ? `Nhóm ${escapeHtml(first.prefix || first.name || '')} · ${escapeHtml(familyId.slice(0, 8))}`
+            : 'Job chưa có nhóm';
+        const selectFamilyButton = familyId
+            ? `<button type="button" class="listing-family-select" data-family-id="${escapeHtml(familyId)}">Chọn cả nhóm</button>`
+            : '';
+        const rows = group.listings.map(listing => {
+            const listingFamilyId = String(listing.family_id ?? '').trim();
+            const attempt = Number(listing.attempt || 0);
+            const attemptText = attempt > 0 ? `Lượt ${attempt}` : 'Lượt ?';
+            const prefixText = listing.prefix ? ` · ${escapeHtml(listing.prefix)}` : '';
+            return `
+                <label class="listing-item">
+                    <input type="checkbox" class="fotello-listing-cb"
+                        data-id="${escapeHtml(listing.id)}"
+                        data-family-id="${escapeHtml(listingFamilyId)}">
+                    <span class="listing-name" title="${escapeHtml(listing.name)}">${escapeHtml(listing.display_name || listing.name)}</span>
+                    <span>${escapeHtml(listing.brackets ?? 0)} brackets</span>
+                    <span>${escapeHtml(attemptText)}${prefixText} · ${escapeHtml(listing.created_at || '')}</span>
+                </label>
+            `;
+        }).join('');
+        return `
+            <div class="listing-family-group">
+                <div class="listing-family-head">
+                    <span class="listing-family-label">${familyLabel}</span>
+                    ${selectFamilyButton}
+                </div>
+                ${rows}
+            </div>
+        `;
+    }).join('');
+
+    container.querySelectorAll('.listing-family-select').forEach(button => {
+        button.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            fotelloSelectFamily(button.dataset.familyId);
+        });
+    });
+    container.querySelectorAll('.fotello-listing-cb').forEach(checkbox => {
+        checkbox.addEventListener('change', updateListingSelectionState);
+    });
+    updateListingSelectionState();
 }
 
 function fotelloToggleAll() {
     const checked = qs('fotello-select-all').checked;
     document.querySelectorAll('.fotello-listing-cb').forEach(cb => cb.checked = checked);
+    updateListingSelectionState();
+}
+
+function updateListingSelectionState() {
+    const boxes = Array.from(document.querySelectorAll('.fotello-listing-cb'));
+    const selectAll = qs('fotello-select-all');
+    if (selectAll) {
+        selectAll.checked = boxes.length > 0 && boxes.every(cb => cb.checked);
+        selectAll.indeterminate = boxes.some(cb => cb.checked) && !selectAll.checked;
+    }
+}
+
+function fotelloSelectFamily(familyId) {
+    const exactFamilyId = String(familyId ?? '');
+    if (!exactFamilyId) return;
+    const boxes = Array.from(document.querySelectorAll('.fotello-listing-cb'))
+        .filter(cb => cb.dataset.familyId === exactFamilyId);
+    if (!boxes.length) return;
+    const shouldCheck = boxes.some(cb => !cb.checked);
+    boxes.forEach(cb => cb.checked = shouldCheck);
+    updateListingSelectionState();
 }
 
 async function browseToInput(id) {
@@ -436,7 +547,7 @@ async function fotelloStartDownload() {
         addLog('Chưa chọn thư mục lưu', 'warn');
         return;
     }
-    addLog(`Bắt đầu tải ${selected.length} listings...`, 'info');
+    addLog(`Bắt đầu tải và xóa watermark cho ${selected.length} listings...`, 'info');
     const result = await callApi('fotello_download', selected, savedir);
     if (!result) return;
     if (!result.ok) {
