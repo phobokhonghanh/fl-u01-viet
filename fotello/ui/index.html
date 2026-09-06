@@ -74,6 +74,7 @@
                 <div id="fotello-listings" class="listing-box">
                     Bấm “Kết nối Fotello”, sau đó “Tải danh sách”.
                 </div>
+                <p class="workflow-note">Chọn các lượt cùng nhóm để tải và xóa watermark. Nếu chưa đủ bản khác góc watermark, ứng dụng sẽ báo ảnh cần bổ sung.</p>
                 <button id="btn-start-download" class="primary wide" onclick="fotelloStartDownload()">Tải ảnh đã
                     chọn</button>
             </section>
@@ -102,6 +103,7 @@
                             <option value="5">5</option>
                             <option value="7">7</option>
                         </select>
+                        <span class="field-note">Mỗi bracket tạo một ảnh output. Workflow tự chạy ít nhất 2 lượt để tìm đủ góc sạch; chỉ retry ảnh còn thiếu.</span>
                     </label>
                     <label>Contrast
                         <select id="fotello-pref-contrast">

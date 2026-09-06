@@ -67,6 +67,7 @@ chrome_process: subprocess.Popen | None = None
 window: Any = None
 license_client = LicenseClient()
 MAX_JOB_LOG_LINES = 500
+JOB_SUMMARY_STATUSES = {"success", "partial", "failed", "stopped"}
 
 
 @dataclass
@@ -78,11 +79,24 @@ class FotelloJob:
     total_count: int = 0
     done_count: int = 0
     uploaded_count: int = 0
+    # downloaded_count is the number of raw variants written to disk.  Keep it
+    # separate from the cleaner counters below so a job with two raw variants
+    # does not look like it produced two final images.
     downloaded_count: int = 0
     output_path: str = ""
     error: str = ""
     stop_requested: bool = False
     logs: list[str] = field(default_factory=list)
+    raw_downloaded_count: int = 0
+    target_count: int = 0
+    cleaned_count: int = 0
+    pending_count: int = 0
+    preview_count: int = 0
+    failed_count: int = 0
+    unresolved_count: int = 0
+    attempt: int = 0
+    family_id: str = ""
+    manifest_path: str = ""
 
     def snapshot(self, include_logs: bool = False) -> dict[str, Any]:
         data = {
@@ -94,6 +108,16 @@ class FotelloJob:
             "done_count": self.done_count,
             "uploaded_count": self.uploaded_count,
             "downloaded_count": self.downloaded_count,
+            "raw_downloaded_count": self.raw_downloaded_count or self.downloaded_count,
+            "target_count": self.target_count,
+            "cleaned_count": self.cleaned_count,
+            "pending_count": self.pending_count,
+            "preview_count": self.preview_count,
+            "failed_count": self.failed_count,
+            "unresolved_count": self.unresolved_count,
+            "attempt": self.attempt,
+            "family_id": self.family_id,
+            "manifest_path": self.manifest_path,
             "output_path": self.output_path,
             "error": self.error,
         }
@@ -253,7 +277,113 @@ def js_job_counts(job: FotelloJob, uploaded: int | None = None, downloaded: int 
         job.uploaded_count = int(uploaded)
     if downloaded is not None:
         job.downloaded_count = int(downloaded)
+        job.raw_downloaded_count = int(downloaded)
     js_call("jobProgress", job.snapshot())
+
+
+def _summary_int(value: Any, default: int = 0) -> int:
+    """Read a summary counter without allowing malformed backend data to stop a job."""
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_job_summary(result: Any, job: FotelloJob) -> dict[str, Any]:
+    """Use the shared workflow summary; raw download counts never imply clean success."""
+    if isinstance(result, dict):
+        return dict(result)
+    downloaded = len(result) if isinstance(result, (list, tuple)) else _summary_int(result)
+    target = job.target_count or job.total_count
+    return {
+        "target_count": target, "downloaded_count": downloaded,
+        "cleaned_count": 0, "pending_count": target,
+        "preview_count": 0, "failed_count": 0,
+        "attempt": job.attempt, "family_id": job.family_id,
+        "manifest_path": job.manifest_path, "output_path": job.output_path,
+        "status": "partial" if downloaded or target else "failed",
+    }
+
+def _apply_job_summary(job: FotelloJob, result: Any, *, live: bool = False) -> dict[str, Any]:
+    """Copy cleaner progress into a job without letting live status end it."""
+    summary = _coerce_job_summary(result, job)
+
+    counter_fields = (
+        "target_count",
+        "cleaned_count",
+        "pending_count",
+        "preview_count",
+        "failed_count",
+        "unresolved_count",
+        "attempt",
+    )
+    for field_name in counter_fields:
+        if field_name in summary and summary[field_name] is not None:
+            setattr(job, field_name, _summary_int(summary[field_name]))
+
+    if "downloaded_count" in summary and summary["downloaded_count"] is not None:
+        job.downloaded_count = _summary_int(summary["downloaded_count"])
+        job.raw_downloaded_count = job.downloaded_count
+    elif "raw_downloaded_count" in summary and summary["raw_downloaded_count"] is not None:
+        job.raw_downloaded_count = _summary_int(summary["raw_downloaded_count"])
+        job.downloaded_count = job.raw_downloaded_count
+
+    for field_name in ("family_id", "manifest_path", "output_path"):
+        value = summary.get(field_name)
+        if value:
+            setattr(job, field_name, str(value))
+
+    # Keep a useful progress denominator for callers that still consume the
+    # legacy progress fields.  The dedicated target/cleaned counters remain
+    # authoritative in the UI.
+    if job.target_count > 0 and live:
+        job.done_count = min(job.target_count, job.cleaned_count)
+        job.total_count = job.target_count
+
+    if not live:
+        status = str(summary.get("status") or "").lower()
+        if status in JOB_SUMMARY_STATUSES:
+            job.status = status
+
+    return summary
+
+
+def js_job_summary(job: FotelloJob, summary: Any) -> None:
+    """Handle a live summary callback from either watermark workflow."""
+    _apply_job_summary(job, summary, live=True)
+    js_job_update(job)
+
+
+def _summary_callback(job: FotelloJob):
+    """Build a callback compatible with summary emitters using one payload."""
+    def callback(summary: Any = None, **fields: Any) -> None:
+        payload = summary if summary is not None else fields
+        js_job_summary(job, payload)
+
+    return callback
+
+
+def _finish_job(job: FotelloJob, result: Any) -> dict[str, Any]:
+    """Apply the final workflow summary, preserving an explicit stop request."""
+    summary = _apply_job_summary(job, result)
+    if job.stop_requested:
+        job.status = "stopped"
+        return summary
+
+    status = str(summary.get("status") or "").lower()
+    if status not in JOB_SUMMARY_STATUSES:
+        target = job.target_count or _summary_int(summary.get("target_count"))
+        cleaned = job.cleaned_count
+        pending = job.pending_count
+        failed = job.failed_count
+        status = "success" if target > 0 and cleaned >= target and pending == 0 and failed == 0 else "partial"
+    if status == "success" and (
+        job.target_count < 1 or job.cleaned_count != job.target_count
+        or job.pending_count or job.failed_count or job.preview_count or job.unresolved_count
+    ):
+        status = "partial"
+    job.status = status
+    return summary
 
 
 def open_ui_page(filename: str) -> bool:
@@ -528,26 +658,35 @@ class Api:
         job = fotello_jobs.create("download", f"Download {len(listing_ids)} listings")
         job_output_dir = Path(savedir) / job.job_id
         job.output_path = str(job_output_dir)
+        try:
+            job_output_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # Let the worker report the actionable write error while keeping
+            # the job visible in the UI.
+            pass
         job.status = "running"
         js_job_update(job)
 
         def _run() -> None:
             js_job_update(job)
             try:
-                count = fotello.fotello_batch_download(
+                result = fotello.fotello_batch_download(
                     listing_ids,
                     str(job_output_dir),
                     lambda msg, msg_type="": js_job_log(job, msg, msg_type),
                     lambda cur, total: js_job_progress(job, cur, total),
                     lambda: job.stop_requested,
+                    summary_fn=_summary_callback(job),
                 )
-                job.downloaded_count = int(count)
-                if job.stop_requested:
-                    job.status = "stopped"
+                summary = _finish_job(job, result)
+                if job.status == "stopped":
                     js_job_log(job, "Đã dừng job tải.", "warn")
+                elif job.status == "success":
+                    js_job_log(job, f"Fotello tải và xóa watermark xong {job.cleaned_count}/{job.target_count} ảnh", "success")
+                elif job.status == "partial":
+                    js_job_log(job, f"Fotello hoàn tất một phần: sạch {job.cleaned_count}/{job.target_count}, còn chờ {job.pending_count} ảnh", "warn")
                 else:
-                    job.status = "success"
-                    js_job_log(job, f"Fotello tải xong {count} ảnh", "success")
+                    js_job_log(job, f"Fotello kết thúc với trạng thái {job.status}.", "error")
             except Exception as exc:
                 print_system_exception("main.Api.fotello_download job", exc)
                 job.status = "failed"
@@ -580,6 +719,10 @@ class Api:
         job = fotello_jobs.create("upload", job_name)
         job_output_dir = Path(savedir) / job.job_id
         job.output_path = str(job_output_dir)
+        try:
+            job_output_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
         job.status = "running"
         js_job_update(job)
 
@@ -599,14 +742,17 @@ class Api:
                     settings,
                     lambda uploaded=None, downloaded=None: js_job_counts(job, uploaded, downloaded),
                     license_level=license_level,
+                    summary_fn=_summary_callback(job),
                 )
-                job.downloaded_count = int(count or 0)
-                if job.stop_requested:
-                    job.status = "stopped"
+                summary = _finish_job(job, count)
+                if job.status == "stopped":
                     js_job_log(job, "Đã dừng job upload/enhance.", "warn")
+                elif job.status == "success":
+                    js_job_log(job, f"Upload và xóa watermark xong {job.cleaned_count}/{job.target_count} ảnh", "success")
+                elif job.status == "partial":
+                    js_job_log(job, f"Upload hoàn tất một phần: sạch {job.cleaned_count}/{job.target_count}, còn chờ {job.pending_count} ảnh", "warn")
                 else:
-                    job.status = "success"
-                    js_job_log(job, f"Fotello upload/download xong {job.downloaded_count} ảnh", "success")
+                    js_job_log(job, f"Fotello kết thúc với trạng thái {job.status}.", "error")
             except Exception as exc:
                 print_system_exception("main.Api.fotello_upload job", exc)
                 job.status = "failed"
