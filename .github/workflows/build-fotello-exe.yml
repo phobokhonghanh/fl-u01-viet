@@ -76,7 +76,7 @@ jobs:
       - name: Kiểm tra import staging
         working-directory: ./build/fotello_stage
         run: |
-          python -c "import browser_runtime; from backend.license import LicenseClient; from backend import service; print('Fotello staging import smoke OK')"
+          python -c "import browser_runtime; from backend.license import LicenseClient; from backend import service; import backend.watermark_cleaner; import backend.watermark_workflow; print('Fotello staging import smoke OK')"
           python main.py --smoke-test
 
       - name: Đóng gói Fotello Windows (.exe)
@@ -93,6 +93,8 @@ jobs:
             --paths "." `
             --collect-submodules requests `
             --collect-submodules selenium `
+            --collect-submodules backend `
+            --collect-submodules PIL `
             --collect-data certifi `
             --hidden-import browser_runtime `
             --hidden-import backend `
@@ -105,6 +107,26 @@ jobs:
             --hidden-import backend.fotello_api `
             --hidden-import backend.license `
             --hidden-import backend.service `
+            --hidden-import backend.watermark_cleaner `
+            --hidden-import backend.watermark_cleaner.cli `
+            --hidden-import backend.watermark_cleaner.compositor `
+            --hidden-import backend.watermark_cleaner.config `
+            --hidden-import backend.watermark_cleaner.detector `
+            --hidden-import backend.watermark_cleaner.exceptions `
+            --hidden-import backend.watermark_cleaner.models `
+            --hidden-import backend.watermark_cleaner.pipeline `
+            --hidden-import backend.watermark_cleaner.validator `
+            --hidden-import backend.watermark_workflow `
+            --hidden-import backend.watermark_workflow.cleaner `
+            --hidden-import backend.watermark_workflow.coordinator `
+            --hidden-import backend.watermark_workflow.manual `
+            --hidden-import backend.watermark_workflow.models `
+            --hidden-import backend.watermark_workflow.store `
+            --hidden-import PIL `
+            --hidden-import PIL.Image `
+            --hidden-import PIL.ImageChops `
+            --hidden-import PIL.ImageFilter `
+            --hidden-import PIL.ImageStat `
             --hidden-import pyarmor_runtime_000000 `
             --hidden-import webview `
             --hidden-import webview.platforms.winforms `
@@ -127,6 +149,8 @@ jobs:
             --paths "." \
             --collect-submodules requests \
             --collect-submodules selenium \
+            --collect-submodules backend \
+            --collect-submodules PIL \
             --collect-data certifi \
             --hidden-import browser_runtime \
             --hidden-import backend \
@@ -139,6 +163,26 @@ jobs:
             --hidden-import backend.fotello_api \
             --hidden-import backend.license \
             --hidden-import backend.service \
+            --hidden-import backend.watermark_cleaner \
+            --hidden-import backend.watermark_cleaner.cli \
+            --hidden-import backend.watermark_cleaner.compositor \
+            --hidden-import backend.watermark_cleaner.config \
+            --hidden-import backend.watermark_cleaner.detector \
+            --hidden-import backend.watermark_cleaner.exceptions \
+            --hidden-import backend.watermark_cleaner.models \
+            --hidden-import backend.watermark_cleaner.pipeline \
+            --hidden-import backend.watermark_cleaner.validator \
+            --hidden-import backend.watermark_workflow \
+            --hidden-import backend.watermark_workflow.cleaner \
+            --hidden-import backend.watermark_workflow.coordinator \
+            --hidden-import backend.watermark_workflow.manual \
+            --hidden-import backend.watermark_workflow.models \
+            --hidden-import backend.watermark_workflow.store \
+            --hidden-import PIL \
+            --hidden-import PIL.Image \
+            --hidden-import PIL.ImageChops \
+            --hidden-import PIL.ImageFilter \
+            --hidden-import PIL.ImageStat \
             --hidden-import pyarmor_runtime_000000 \
             --hidden-import webview \
             --hidden-import webview.platforms.cocoa \
