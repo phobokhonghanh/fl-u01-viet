@@ -35,4 +35,6 @@ Thumbs.db
 build/
 *.exe
 *.spec
+!fotello/Fotello.spec
+!autohdr_exe/main.spec
 realtyedit/
