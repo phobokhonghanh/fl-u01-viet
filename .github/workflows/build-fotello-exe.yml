@@ -118,7 +118,10 @@ jobs:
             --hidden-import backend.watermark_cleaner.validator `
             --hidden-import backend.watermark_workflow `
             --hidden-import backend.watermark_workflow.cleaner `
+            --hidden-import backend.watermark_workflow.comparison `
             --hidden-import backend.watermark_workflow.coordinator `
+            --hidden-import backend.watermark_workflow.formatting `
+            --hidden-import backend.watermark_workflow.manifest_sync `
             --hidden-import backend.watermark_workflow.manual `
             --hidden-import backend.watermark_workflow.models `
             --hidden-import backend.watermark_workflow.store `
@@ -174,7 +177,10 @@ jobs:
             --hidden-import backend.watermark_cleaner.validator \
             --hidden-import backend.watermark_workflow \
             --hidden-import backend.watermark_workflow.cleaner \
+            --hidden-import backend.watermark_workflow.comparison \
             --hidden-import backend.watermark_workflow.coordinator \
+            --hidden-import backend.watermark_workflow.formatting \
+            --hidden-import backend.watermark_workflow.manifest_sync \
             --hidden-import backend.watermark_workflow.manual \
             --hidden-import backend.watermark_workflow.models \
             --hidden-import backend.watermark_workflow.store \
