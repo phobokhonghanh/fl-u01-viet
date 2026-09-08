@@ -144,6 +144,14 @@ def clean_case(
         for p in validated.image_paths:
             img = Image.open(p)
             img.load()
+            if cfg.allow_dimension_mismatch and images and img.size != images[0].size:
+                logger.info(
+                    "Resizing variant %s from %s to base image dimensions %s",
+                    p.name,
+                    img.size,
+                    images[0].size,
+                )
+                img = img.resize(images[0].size, Image.Resampling.LANCZOS)
             images.append(img)
 
         # Verify all inputs are genuine copies of the same original photo (control region check)

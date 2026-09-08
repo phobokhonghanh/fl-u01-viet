@@ -433,7 +433,7 @@ def compare_variant_pair(
     ``uncertain`` or ``blocked`` so a coordinator can continue trying other
     pairs when one download is bad.
     """
-    cfg = config or WatermarkCleanerConfig()
+    cfg = config or WatermarkCleanerConfig(allow_dimension_mismatch=True)
     first_path = Path(first)
     second_path = Path(second)
 
@@ -457,6 +457,8 @@ def compare_variant_pair(
             second_open.load()
             first_image = first_open.copy()
             second_image = second_open.copy()
+            if cfg.allow_dimension_mismatch and first_image.size != second_image.size:
+                second_image = second_image.resize(first_image.size, Image.Resampling.BILINEAR)
 
         try:
             validate_source_image_consistency(

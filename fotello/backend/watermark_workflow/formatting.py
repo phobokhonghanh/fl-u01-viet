@@ -74,21 +74,21 @@ def format_cleaner_result_vn(
         )
         all_text_lower = all_text.lower()
 
-        # if "dimensionmismatch" in all_text_lower or "conflicting pixel dimensions" in all_text_lower or "kích thước" in all_text_lower:
-        #     dims = re.findall(r"\((\d+),\s*(\d+)\)", all_text)
-        #     if not dims:
-        #         dims = re.findall(r"(\d{3,5})\s*[xX]\s*(\d{3,5})", all_text)
-        #     if dims and len(dims) >= 2:
-        #         dim_str = f"{dims[0][0]}x{dims[0][1]} vs {dims[1][0]}x{dims[1][1]}"
-        #         detail = f"Kích thước ảnh không khớp ({dim_str})"
-        #     else:
-        #         detail = "Kích thước ảnh không khớp"
-        #     msg = (
-        #         f"Step 10: {detail} - {clean_name}: Không thể ghép ảnh."
-        #         if with_step
-        #         else f"{clean_name}: {detail} - Không thể ghép ảnh."
-        #     )
-        #     return msg, "error"
+        if "dimensionmismatch" in all_text_lower or "conflicting pixel dimensions" in all_text_lower or "kích thước" in all_text_lower:
+            dims = re.findall(r"\((\d+),\s*(\d+)\)", all_text)
+            if not dims:
+                dims = re.findall(r"(\d{3,5})\s*[xX]\s*(\d{3,5})", all_text)
+            if dims and len(dims) >= 2:
+                dim_str = f"{dims[0][0]}x{dims[0][1]} vs {dims[1][0]}x{dims[1][1]}"
+                detail = f"Kích thước ảnh không khớp ({dim_str})"
+            else:
+                detail = "Kích thước ảnh không khớp"
+            msg = (
+                f"Step 10: {detail} - {clean_name}: Không thể ghép ảnh."
+                if with_step
+                else f"{clean_name}: {detail} - Không thể ghép ảnh."
+            )
+            return msg, "error"
 
         if "sourcemismatch" in all_text_lower or "sourceimagemismatch" in all_text_lower:
             msg = (
@@ -110,10 +110,45 @@ def format_cleaner_result_vn(
             msg = f"Step 10: Quá trình ghép bị dừng - {clean_name}." if with_step else f"{clean_name}: Quá trình ghép bị dừng."
             return msg, "warn"
 
+        if "filesizedeltaexceeded" in all_text_lower or "file size delta" in all_text_lower:
+            msg = (
+                f"Step 10: Chênh lệch dung lượng tệp vượt ngưỡng - {clean_name}: Không thể ghép ảnh."
+                if with_step
+                else f"{clean_name}: Chênh lệch dung lượng tệp vượt ngưỡng - Không thể ghép ảnh."
+            )
+            return msg, "error"
+
+        if "not found" in all_text_lower or "không tìm thấy" in all_text_lower:
+            msg = (
+                f"Step 10: Không tìm thấy tệp ảnh đầu vào - {clean_name}: Không thể ghép ảnh."
+                if with_step
+                else f"{clean_name}: Không tìm thấy tệp ảnh đầu vào - Không thể ghép ảnh."
+            )
+            return msg, "error"
+
+        if "modemismatch" in all_text_lower:
+            msg = (
+                f"Step 10: Hệ màu ảnh không khớp - {clean_name}: Không thể ghép ảnh."
+                if with_step
+                else f"{clean_name}: Hệ màu ảnh không khớp - Không thể ghép ảnh."
+            )
+            return msg, "error"
+
+        # If a specific error reason is present, include concise reason snippet
+        clean_detail = "lỗi dữ liệu đầu vào"
+        for candidate in (rs, error_type):
+            if candidate and str(candidate) != "None":
+                cand_str = str(candidate).strip()
+                if ":" in cand_str:
+                    cand_str = cand_str.split(":")[-1].strip()
+                if cand_str and len(cand_str) <= 70 and not cand_str.startswith("{"):
+                    clean_detail = f"lỗi dữ liệu đầu vào: {cand_str}"
+                    break
+
         msg = (
-            f"Step 10: Không thể ghép ảnh - {clean_name} (lỗi dữ liệu đầu vào)."
+            f"Step 10: Không thể ghép ảnh - {clean_name} ({clean_detail})."
             if with_step
-            else f"{clean_name}: Không thể ghép ảnh (lỗi dữ liệu đầu vào)."
+            else f"{clean_name}: Không thể ghép ảnh ({clean_detail})."
         )
         return msg, "error"
 

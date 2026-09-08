@@ -20,6 +20,9 @@ class WatermarkCleanerConfig:
     # File size validation threshold (default 1 MiB)
     max_file_size_delta_bytes: int = 1024 * 1024  # 1 MiB = 1,048,576 bytes
 
+    # Allow differing dimensions between variants (resizes variants to base image)
+    allow_dimension_mismatch: bool = False
+
     # Input requirements
     min_images_per_case: int = 2
     supported_extensions: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp")
