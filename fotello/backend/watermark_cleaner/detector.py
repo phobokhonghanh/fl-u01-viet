@@ -110,6 +110,7 @@ def analyze_corner_roi(
 
     # Build union difference mask for each image
     edge_scores: list[float] = []
+    mask_pixel_counts: list[int] = []
     for i in range(n):
         # Union mask where image i differs from any other image beyond noise threshold
         union_mask = Image.new("L", (corner_region.width, corner_region.height), 0)
@@ -122,6 +123,7 @@ def analyze_corner_roi(
 
         # High-frequency edge energy within the watermark difference mask
         mask_pixels = sum(union_mask.histogram()[1:])
+        mask_pixel_counts.append(mask_pixels)
         if mask_pixels == 0:
             edge_scores.append(0.0)
         else:
@@ -129,6 +131,11 @@ def analyze_corner_roi(
             edge_img = gray_crop.filter(ImageFilter.FIND_EDGES)
             stat = ImageStat.Stat(edge_img, mask=union_mask)
             edge_scores.append(stat.mean[0])
+
+    watermark_ratios = {
+        image_paths[i].name: round(mask_pixel_counts[i] / max(1, corner_area), 6)
+        for i in range(n)
+    }
 
     if n == 2:
         score_0, score_1 = edge_scores[0], edge_scores[1]
@@ -157,6 +164,7 @@ def analyze_corner_roi(
                 "confidence": round(conf, 4),
                 "significant_pixels": max_sig_pixels,
                 "significant_ratio": round(max_sig_ratio, 6),
+                "watermark_ratios": watermark_ratios,
             },
         )
         return analysis, watermarked_indices
@@ -196,9 +204,30 @@ def analyze_corner_roi(
             "confidence": round(conf, 4),
             "significant_pixels": max_sig_pixels,
             "significant_ratio": round(max_sig_ratio, 6),
+            "watermark_ratios": watermark_ratios,
         },
     )
     return analysis, watermarked_indices
+
+
+def _get_corner_watermark_metric(
+    corner: CornerName,
+    img_idx: int,
+    corner_analyses: dict[CornerName, CornerAnalysis],
+    image_paths: list[Path],
+) -> tuple[float, float, float]:
+    """Calculate ranking key (watermark_ratio, significant_pixels, edge_score) for an image corner."""
+    analysis = corner_analyses.get(corner)
+    if not analysis:
+        return (0.0, 0.0, 0.0)
+    metrics = getattr(analysis, "metrics", {}) or {}
+    wm_ratios = metrics.get("watermark_ratios") or {}
+    img_name = image_paths[img_idx].name
+    ratio = float(wm_ratios.get(img_name, metrics.get("significant_ratio", 0.0)))
+    sig_pixels = float(metrics.get("significant_pixels") or 0.0)
+    edge_scores = metrics.get("edge_scores") or {}
+    edge_score = float(edge_scores.get(img_name, 0.0))
+    return (ratio, sig_pixels, edge_score)
 
 
 def detect_watermarks_and_plan(
@@ -232,6 +261,66 @@ def detect_watermarks_and_plan(
             "All input images have identical decoded pixels across all corner ROIs. "
             "Unable to isolate or clean watermarks without an alternative clean source."
         )
+
+    # Enforce domain invariant: each candidate image has at most 1 watermark corner.
+    # Noise/artifacts (e.g. 5-10% compression noise) may cause extra corners to trigger.
+    # For any image flagged in multiple corners, select the single corner with the HIGHEST % watermark.
+    for idx in range(len(images)):
+        wm_corners = image_wm_corners[idx]
+        if len(wm_corners) > 1:
+            best_corner = max(
+                wm_corners,
+                key=lambda c: _get_corner_watermark_metric(c, idx, corner_analyses, image_paths),
+            )
+            image_wm_corners[idx] = {best_corner}
+
+    # Reconcile corner analyses and clean/watermarked assignments
+    reconciled_corner_wm_map: dict[CornerName, set[int]] = {c: set() for c in CornerName}
+    for idx, corners in image_wm_corners.items():
+        for c in corners:
+            reconciled_corner_wm_map[c].add(idx)
+
+    for corner_name in CornerName:
+        assigned_indices = reconciled_corner_wm_map[corner_name]
+        analysis = corner_analyses[corner_name]
+
+        if not assigned_indices:
+            # Corner had no watermark or was noise eliminated in favor of higher-% watermark
+            corner_analyses[corner_name] = CornerAnalysis(
+                corner=corner_name,
+                box=analysis.box,
+                status="clean_all",
+                clean_source=str(image_paths[0]),
+                watermarked_sources=[],
+                confidence=1.0,
+                metrics=analysis.metrics,
+            )
+        else:
+            wm_sources = [str(image_paths[i]) for i in sorted(assigned_indices)]
+            clean_indices = [i for i in range(len(images)) if i not in assigned_indices]
+            if clean_indices:
+                clean_src = str(image_paths[clean_indices[0]])
+                st = (
+                    "resolved"
+                    if analysis.confidence >= config.min_confidence_threshold
+                    else "resolved_low_confidence"
+                )
+            else:
+                clean_src = None
+                st = "unresolved"
+
+            corner_analyses[corner_name] = CornerAnalysis(
+                corner=corner_name,
+                box=analysis.box,
+                status=st,
+                clean_source=clean_src,
+                watermarked_sources=wm_sources,
+                confidence=analysis.confidence,
+                metrics=analysis.metrics,
+            )
+
+    corner_wm_map = reconciled_corner_wm_map
+    differing_corners = sum(1 for indices in corner_wm_map.values() if indices)
 
     warnings: list[str] = []
     # Distribution anomalies lower confidence but do not suppress a replaceable preview.

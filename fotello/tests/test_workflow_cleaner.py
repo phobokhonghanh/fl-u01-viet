@@ -10,7 +10,14 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw
 
 from backend.watermark_cleaner.config import WatermarkCleanerConfig
-from backend.watermark_workflow.cleaner import clean_output, compare_variant_pair
+from backend.watermark_workflow.cleaner import (
+    apply_watermark_positions_to_manifest,
+    clean_output,
+    compare_variant_pair,
+    update_manifest_watermark_positions,
+)
+from backend.watermark_workflow.models import new_manifest
+from backend.watermark_workflow.store import ManifestStore
 
 
 class TestWorkflowCleaner(unittest.TestCase):
@@ -178,6 +185,172 @@ class TestWorkflowCleaner(unittest.TestCase):
         comparison = compare_variant_pair(*fixture_paths[:2])
         self.assertEqual(comparison["status"], "distinct")
         self.assertEqual(comparison["changed_corners"], ["BL", "BR"])
+
+    def test_noise_corner_ignored_in_favor_of_highest_watermark(self) -> None:
+        """A 3rd corner with low noise is discarded, recognizing exactly the 2 primary distinct watermark corners."""
+        from PIL import ImageDraw
+        base = self._base()
+        im1 = self._watermark(base, "BL", 1)
+        im2 = self._watermark(base, "TR", 2)
+        # Add small noise in TL on im1
+        draw = ImageDraw.Draw(im1)
+        draw.rectangle([5, 5, 45, 35], fill=(250, 180, 90))
+
+        paths = self._write_pair(im1, im2)
+        comparison = compare_variant_pair(*paths)
+        self.assertEqual(comparison["status"], "distinct")
+        self.assertTrue(comparison["distinct"])
+        self.assertEqual(set(comparison["changed_corners"]), {"BL", "TR"})
+
+    def test_watermark_positions_recorded_per_image_in_clean_output(self) -> None:
+        """clean_output returns watermark positions and applies them to manifest variants."""
+        base = self._base()
+        im1 = self._watermark(base, "BL", 1)
+        im2 = self._watermark(base, "TR", 2)
+        paths = self._write_pair(im1, im2)
+
+        job_dir = self.temp_dir / "job_wm_pos"
+        result = clean_output("out-wm-1", "img01", paths, job_dir)
+
+        self.assertEqual(result["status"], "cleaned")
+        self.assertIn("variant_watermarks", result)
+        self.assertIn("watermark_positions", result)
+
+        positions = result["watermark_positions"]
+        self.assertEqual(positions[str(paths[0])]["corner"], "BL")
+        self.assertGreater(positions[str(paths[0])]["watermark_percent"], 0.0)
+        self.assertIn("BL", positions[str(paths[0])]["display"])
+
+        self.assertEqual(positions[str(paths[1])]["corner"], "TR")
+        self.assertGreater(positions[str(paths[1])]["watermark_percent"], 0.0)
+        self.assertIn("TR", positions[str(paths[1])]["display"])
+
+    def test_apply_watermark_positions_to_manifest_and_store(self) -> None:
+        """apply_watermark_positions_to_manifest updates variants and attempts, persisting to manifest.json."""
+        base = self._base()
+        im1 = self._watermark(base, "BL", 1)
+        im2 = self._watermark(base, "TR", 2)
+        paths = self._write_pair(im1, im2)
+
+        output_dir = self.temp_dir / "workflow_output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        group = {
+            "output_id": "out-101",
+            "output_name": "photo01.png",
+            "input_paths": [str(paths[0])],
+            "input_filenames": ["photo01.jpg"],
+            "variants": [
+                {"enhance_id": "enh-1", "listing_id": "lst-1", "attempt": 1, "path": str(paths[0])},
+                {"enhance_id": "enh-2", "listing_id": "lst-2", "attempt": 2, "path": str(paths[1])},
+            ],
+            "status": "need_variant",
+        }
+        manifest = new_manifest([group], preferences={}, team_id="team-1", prefix="job", output_dir=output_dir)
+        manifest["attempts"] = [
+            {
+                "number": 1,
+                "records": [
+                    {"output_id": "out-101", "enhance_id": "enh-1", "path": str(paths[0])}
+                ]
+            },
+            {
+                "number": 2,
+                "records": [
+                    {"output_id": "out-101", "enhance_id": "enh-2", "path": str(paths[1])}
+                ]
+            },
+        ]
+
+        result = clean_output("out-101", "photo01", paths, output_dir)
+        self.assertEqual(result["status"], "cleaned")
+
+        updated = apply_watermark_positions_to_manifest(manifest, manifest["groups"][0], result)
+        self.assertTrue(updated)
+
+        var1 = manifest["groups"][0]["variants"][0]
+        var2 = manifest["groups"][0]["variants"][1]
+        self.assertEqual(var1["watermark_corner"], "BL")
+        self.assertEqual(var1["watermark_position"], "BL")
+        self.assertIsNotNone(var1.get("watermark_box"))
+        self.assertGreater(var1["watermark_percent"], 0.0)
+        self.assertGreater(var1["confidence_percent"], 0.0)
+        self.assertEqual(var1["watermark_display"], f"BL ({var1['watermark_percent']:.2f}%)")
+
+        self.assertEqual(var2["watermark_corner"], "TR")
+        self.assertEqual(var2["watermark_position"], "TR")
+        self.assertIsNotNone(var2.get("watermark_box"))
+        self.assertGreater(var2["watermark_percent"], 0.0)
+        self.assertGreater(var2["confidence_percent"], 0.0)
+        self.assertEqual(var2["watermark_display"], f"TR ({var2['watermark_percent']:.2f}%)")
+
+        # Verify group-level watermark_positions detailed mapping
+        self.assertEqual(manifest["groups"][0]["watermark_positions"][str(paths[0])]["corner"], "BL")
+        self.assertEqual(manifest["groups"][0]["watermark_positions"][str(paths[0])]["watermark_percent"], var1["watermark_percent"])
+        self.assertEqual(manifest["groups"][0]["watermark_positions"][str(paths[1])]["corner"], "TR")
+        self.assertEqual(manifest["groups"][0]["watermark_positions"][str(paths[1])]["watermark_percent"], var2["watermark_percent"])
+
+        # Verify attempt records updated
+        rec1 = manifest["attempts"][0]["records"][0]
+        rec2 = manifest["attempts"][1]["records"][0]
+        self.assertEqual(rec1["watermark_corner"], "BL")
+        self.assertEqual(rec1["watermark_percent"], var1["watermark_percent"])
+        self.assertEqual(rec1["watermark_display"], var1["watermark_display"])
+        self.assertEqual(rec2["watermark_corner"], "TR")
+        self.assertEqual(rec2["watermark_percent"], var2["watermark_percent"])
+        self.assertEqual(rec2["watermark_display"], var2["watermark_display"])
+
+        # Persist and verify saved JSON on disk
+        store = ManifestStore(output_dir)
+        store.save(manifest)
+
+        loaded = store.load()
+        self.assertIsNotNone(loaded)
+        loaded_var1 = loaded["groups"][0]["variants"][0]
+        self.assertEqual(loaded_var1["watermark_corner"], "BL")
+        self.assertEqual(loaded_var1["watermark_position"], "BL")
+        self.assertEqual(loaded_var1["watermark_percent"], var1["watermark_percent"])
+        self.assertEqual(loaded_var1["watermark_display"], var1["watermark_display"])
+
+    def test_update_manifest_watermark_positions_standalone(self) -> None:
+        """update_manifest_watermark_positions directly scans and updates an existing manifest file."""
+        base = self._base()
+        im1 = self._watermark(base, "BL", 1)
+        im2 = self._watermark(base, "BR", 2)
+        paths = self._write_pair(im1, im2)
+
+        output_dir = self.temp_dir / "standalone_manifest"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        group = {
+            "output_id": "out-202",
+            "output_name": "photo02.png",
+            "input_paths": [str(paths[0])],
+            "input_filenames": ["photo02.jpg"],
+            "variants": [
+                {"enhance_id": "enh-a", "path": str(paths[0])},
+                {"enhance_id": "enh-b", "path": str(paths[1])},
+            ],
+            "status": "need_variant",
+        }
+        manifest = new_manifest([group], preferences={}, team_id="team-2", prefix="job2", output_dir=output_dir)
+        store = ManifestStore(output_dir)
+        store.save(manifest)
+
+        manifest_path = output_dir / "manifest.json"
+        updated_manifest = update_manifest_watermark_positions(manifest_path)
+
+        var0 = updated_manifest["groups"][0]["variants"][0]
+        var1 = updated_manifest["groups"][0]["variants"][1]
+        self.assertEqual(var0["watermark_corner"], "BL")
+        self.assertGreater(var0["watermark_percent"], 0.0)
+        self.assertEqual(var1["watermark_corner"], "BR")
+        self.assertGreater(var1["watermark_percent"], 0.0)
+
+        # Check re-loaded from disk
+        reloaded = store.load()
+        self.assertEqual(reloaded["groups"][0]["variants"][0]["watermark_corner"], "BL")
+        self.assertEqual(reloaded["groups"][0]["variants"][1]["watermark_corner"], "BR")
 
 
 if __name__ == "__main__":

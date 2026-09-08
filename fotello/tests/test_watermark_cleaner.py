@@ -473,6 +473,33 @@ class TestWatermarkCleaner(unittest.TestCase):
             (w - int(w * 0.35), int(h * 0.48), w, h),
         )
 
+    def test_single_watermark_with_highest_percentage_selected(self) -> None:
+        """Each image only has 1 watermark corner; the corner with highest % is chosen and lower % noise is ignored."""
+        case_dir = self.temp_dir / "case_highest_pct"
+        case_dir.mkdir(parents=True)
+
+        w, h = 800, 600
+        base = self._create_synthetic_base_image(w, h)
+        # Image 1: strong watermark in BL
+        im1 = self._stamp_watermark(base, "BL", "STRONG_WM_BL")
+        # Image 2: strong watermark in TR
+        im2 = self._stamp_watermark(base, "TR", "STRONG_WM_TR")
+
+        # Stamp minor noise in TL on Image 1 (simulating compression artifact / false trigger with ~7% diff)
+        draw1 = ImageDraw.Draw(im1)
+        draw1.rectangle([5, 5, 50, 40], fill=(255, 200, 100))
+
+        im1.save(case_dir / "img1.png")
+        im2.save(case_dir / "img2.png")
+
+        result = clean_directory(case_dir)
+        self.assertTrue(result.success)
+        self.assertIsNotNone(result.output_path)
+        # Verify replaced region was BL (the primary watermark), not TL
+        replaced_corners = [r["corner"] for r in result.regions_replaced]
+        self.assertIn("BL", replaced_corners)
+        self.assertNotIn("TL", replaced_corners)
+
 
 if __name__ == "__main__":
     unittest.main()

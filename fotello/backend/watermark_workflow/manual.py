@@ -20,7 +20,7 @@ from backend.downloads import (
     fotello_list_listings,
 )
 
-from .cleaner import clean_output, format_cleaner_result_vn
+from .cleaner import apply_watermark_positions_to_manifest, clean_output, format_cleaner_result_vn
 from .models import parse_attempt_name, sanitize_output_stem, sanitize_prefix, summary
 from .store import ManifestStore
 
@@ -650,6 +650,7 @@ def download_manual_workflow(
                 )
             except Exception as exc:
                 result = {"status": "blocked", "reason": str(exc)}
+            apply_watermark_positions_to_manifest(manifest, group, result)
             msg, level = format_cleaner_result_vn(
                 str(group.get("output_name") or group.get("output_id") or ""),
                 result,
