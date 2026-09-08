@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .cleaner import format_cleaner_result_vn
+from .cleaner import apply_watermark_positions_to_manifest, format_cleaner_result_vn
 from .models import attempt_name, summary, _to_vn_datetime
 from .store import ManifestStore
 
@@ -212,6 +212,7 @@ def run_auto(manifest, *, upload, create_listing, create_enhance, check_ready,
                         group.update({key: result[key] for key in
                                       ("status", "reason", "output_path", "report_path", "preview_path")
                                       if key in result})
+                        apply_watermark_positions_to_manifest(manifest, group, result)
                         msg, level = format_cleaner_result_vn(group["output_name"], result, with_step=True)
                         log(msg, level)
                     except Exception as exc:
