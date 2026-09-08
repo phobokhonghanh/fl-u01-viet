@@ -74,21 +74,21 @@ def format_cleaner_result_vn(
         )
         all_text_lower = all_text.lower()
 
-        if "dimensionmismatch" in all_text_lower or "conflicting pixel dimensions" in all_text_lower or "kích thước" in all_text_lower:
-            dims = re.findall(r"\((\d+),\s*(\d+)\)", all_text)
-            if not dims:
-                dims = re.findall(r"(\d{3,5})\s*[xX]\s*(\d{3,5})", all_text)
-            if dims and len(dims) >= 2:
-                dim_str = f"{dims[0][0]}x{dims[0][1]} vs {dims[1][0]}x{dims[1][1]}"
-                detail = f"Kích thước ảnh không khớp ({dim_str})"
-            else:
-                detail = "Kích thước ảnh không khớp"
-            msg = (
-                f"Step 10: {detail} - {clean_name}: Không thể ghép ảnh."
-                if with_step
-                else f"{clean_name}: {detail} - Không thể ghép ảnh."
-            )
-            return msg, "error"
+        # if "dimensionmismatch" in all_text_lower or "conflicting pixel dimensions" in all_text_lower or "kích thước" in all_text_lower:
+        #     dims = re.findall(r"\((\d+),\s*(\d+)\)", all_text)
+        #     if not dims:
+        #         dims = re.findall(r"(\d{3,5})\s*[xX]\s*(\d{3,5})", all_text)
+        #     if dims and len(dims) >= 2:
+        #         dim_str = f"{dims[0][0]}x{dims[0][1]} vs {dims[1][0]}x{dims[1][1]}"
+        #         detail = f"Kích thước ảnh không khớp ({dim_str})"
+        #     else:
+        #         detail = "Kích thước ảnh không khớp"
+        #     msg = (
+        #         f"Step 10: {detail} - {clean_name}: Không thể ghép ảnh."
+        #         if with_step
+        #         else f"{clean_name}: {detail} - Không thể ghép ảnh."
+        #     )
+        #     return msg, "error"
 
         if "sourcemismatch" in all_text_lower or "sourceimagemismatch" in all_text_lower:
             msg = (
