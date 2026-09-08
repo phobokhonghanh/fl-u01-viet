@@ -119,8 +119,6 @@ def _publish_clean_output(source: Path, destination: Path) -> None:
     temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
     try:
         shutil.copyfile(source, temporary)
-        with temporary.open("rb") as handle:
-            os.fsync(handle.fileno())
         for attempt in range(5):
             try:
                 os.replace(temporary, destination)

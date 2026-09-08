@@ -170,7 +170,17 @@ def clean_case(
         # Save output image atomically losslessly
         try:
             clean_img.save(tmp_output, format=cfg.output_format)
-            tmp_output.replace(output_img_path)
+            for attempt in range(5):
+                try:
+                    tmp_output.replace(output_img_path)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        import shutil
+                        shutil.copyfile(tmp_output, output_img_path)
+                        break
+                    import time
+                    time.sleep(0.05)
         except Exception as exc:
             tmp_output.unlink(missing_ok=True)
             raise ImageSaveError(

@@ -73,8 +73,21 @@ def _atomic_json_write(path: Path, value: Any) -> None:
             json.dump(_json_ready(value), handle, ensure_ascii=False, indent=2, sort_keys=True)
             handle.write("\n")
             handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp_name, path)
+            try:
+                os.fsync(handle.fileno())
+            except OSError:
+                pass
+        for attempt in range(5):
+            try:
+                os.replace(temp_name, path)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    import shutil
+                    shutil.copyfile(temp_name, path)
+                    break
+                import time
+                time.sleep(0.05)
         temp_name = None
     finally:
         if temp_name:

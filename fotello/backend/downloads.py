@@ -491,8 +491,21 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
             handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(tmp_path, path)
+            try:
+                os.fsync(handle.fileno())
+            except OSError:
+                pass
+        for attempt in range(5):
+            try:
+                os.replace(tmp_path, path)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    import shutil
+                    shutil.copyfile(tmp_path, path)
+                    break
+                import time
+                time.sleep(0.05)
     finally:
         tmp_path.unlink(missing_ok=True)
 
