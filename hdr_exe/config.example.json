@@ -1,0 +1,8 @@
+{
+  "autoenhance": {
+    "api_base": "https://api.autoenhance.ai/v3",
+    "max_api_workers": 4,
+    "max_download_workers": 4,
+    "request_timeout_seconds": 60
+  }
+}
