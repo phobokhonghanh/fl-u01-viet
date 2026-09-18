@@ -352,6 +352,22 @@ class TestWorkflowCleaner(unittest.TestCase):
         self.assertEqual(reloaded["groups"][0]["variants"][0]["watermark_corner"], "BL")
         self.assertEqual(reloaded["groups"][0]["variants"][1]["watermark_corner"], "BR")
 
+    def test_clean_output_with_different_dimensions_succeeds(self) -> None:
+        """Variants with slightly different dimensions are aligned and cleaned without error."""
+        base1 = self._base(width=640, height=480)
+        base2 = base1.resize((640, 484), Image.Resampling.BILINEAR)  # 4 pixels taller variant
+        im1 = self._watermark(base1, "BL", 1)
+        im2 = self._watermark(base2, "TR", 2)
+        paths = self._write_pair(im1, im2)
+
+        result = clean_output("out-diff-dim", "photo_diff.png", [str(p) for p in paths], self.temp_dir)
+        self.assertEqual(result["status"], "cleaned")
+        self.assertIsNotNone(result.get("output_path"))
+        output_file = Path(result["output_path"])
+        self.assertTrue(output_file.is_file())
+        with Image.open(output_file) as out_img:
+            self.assertEqual(out_img.size, (640, 480))
+
 
 if __name__ == "__main__":
     unittest.main()

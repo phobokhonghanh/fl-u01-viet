@@ -1,0 +1,106 @@
+name: HDR CI
+
+on:
+  push:
+    branches: ["deploy/exe"]
+    paths:
+      - 'hdr_exe/**'
+      - '.github/workflows/build-hdr-exe.yml'
+  workflow_dispatch:
+
+
+jobs:
+  build_hdr_exe:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Tải Code vào môi trường Build
+        uses: actions/checkout@v4
+
+      - name: Cài đặt Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Đọc version từ hdr_exe/version.md (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $raw = (Get-Content hdr_exe/version.md).Trim()
+          $version = $raw -replace '^v', ''
+          echo "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Đọc version từ hdr_exe/version.md (macOS)
+        if: runner.os != 'Windows'
+        run: |
+          RAW=$(cat hdr_exe/version.md | tr -d '\r\n')
+          VERSION=${RAW#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Cài đặt Thư viện và PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r hdr_exe/requirements.txt
+
+      - name: Đóng gói Windows (.exe)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: ./hdr_exe
+        run: |
+          pyinstaller `
+            --onefile `
+            --noconsole `
+            --name HDR_Client_${{ env.VERSION }} `
+            --add-data "ui;ui" `
+            --paths "." `
+            --collect-submodules requests `
+            --collect-submodules PIL `
+            --collect-submodules websocket `
+            --collect-submodules core `
+            --collect-data certifi `
+            --hidden-import webview `
+            --hidden-import webview.platforms.winforms `
+            --exclude-module PyQt5 `
+            --exclude-module PyQt6 `
+            --exclude-module PySide2 `
+            --exclude-module PySide6 `
+            main.py
+
+      - name: Đóng gói macOS
+        if: runner.os != 'Windows'
+        working-directory: ./hdr_exe
+        run: |
+          pyinstaller \
+            --windowed \
+            --name HDR_Client_macOS_${{ env.VERSION }} \
+            --add-data "ui:ui" \
+            --paths "." \
+            --collect-submodules requests \
+            --collect-submodules PIL \
+            --collect-submodules websocket \
+            --collect-submodules core \
+            --collect-data certifi \
+            --hidden-import webview \
+            --hidden-import webview.platforms.cocoa \
+            main.py
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent "HDR_Client_macOS_${{ env.VERSION }}.app" "HDR_Client_macOS_${{ env.VERSION }}.zip"
+
+      - name: Lưu trữ Artifact Windows
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: HDR_Client_Windows_${{ env.VERSION }}
+          path: hdr_exe/dist/HDR_Client_${{ env.VERSION }}.exe
+          retention-days: 7
+
+      - name: Lưu trữ Artifact macOS
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: HDR_Client_macOS_${{ env.VERSION }}
+          path: hdr_exe/dist/HDR_Client_macOS_${{ env.VERSION }}.zip
+          retention-days: 7

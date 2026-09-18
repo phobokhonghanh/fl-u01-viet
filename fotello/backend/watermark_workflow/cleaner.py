@@ -119,9 +119,16 @@ def _publish_clean_output(source: Path, destination: Path) -> None:
     temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
     try:
         shutil.copyfile(source, temporary)
-        with temporary.open("rb") as handle:
-            os.fsync(handle.fileno())
-        os.replace(temporary, destination)
+        for attempt in range(5):
+            try:
+                os.replace(temporary, destination)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    shutil.copyfile(temporary, destination)
+                    break
+                import time
+                time.sleep(0.05)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -241,7 +248,7 @@ def clean_output(
     ``<output_dir>/clean/<output_name>``. Existing clean files are returned as
     completed results and are never removed by a later retry.
     """
-    cfg = config or WatermarkCleanerConfig()
+    cfg = config or WatermarkCleanerConfig(allow_dimension_mismatch=True)
     root = Path(output_dir)
     filename = _normalise_output_name(output_name)
     clean_path = root / "clean" / filename if filename else root / "clean" / ""

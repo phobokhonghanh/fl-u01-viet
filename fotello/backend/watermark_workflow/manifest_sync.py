@@ -39,7 +39,19 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
             json.dumps(payload, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-        os.replace(temporary, path)
+        for attempt in range(5):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    path.write_text(
+                        json.dumps(payload, indent=2, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+                    break
+                import time
+                time.sleep(0.05)
     finally:
         temporary.unlink(missing_ok=True)
 

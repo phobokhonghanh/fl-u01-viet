@@ -123,7 +123,7 @@ def validate_case_inputs(
 
     # Check dimension equality across all images
     unique_dims = set(dimensions.values())
-    if len(unique_dims) > 1:
+    if len(unique_dims) > 1 and not cfg.allow_dimension_mismatch:
         raise DimensionMismatchError(
             f"Images have conflicting pixel dimensions: {dimensions}",
             dimensions=dimensions,
@@ -137,7 +137,7 @@ def validate_case_inputs(
             modes=modes,
         )
 
-    resolved_dim = next(iter(unique_dims))
+    resolved_dim = dimensions[str(paths[0].resolve())]
     resolved_mode = next(iter(unique_modes))
     resolved_case_dir = Path(case_dir) if case_dir else paths[0].parent
     resolved_case_name = case_name or resolved_case_dir.name
@@ -182,7 +182,13 @@ def validate_source_image_consistency(
     n = len(images)
     for i in range(n):
         for j in range(i + 1, n):
-            diff = ImageChops.difference(images[i].convert("RGB"), images[j].convert("RGB")).convert("L")
+            img_i = images[i].convert("RGB")
+            img_j = images[j].convert("RGB")
+            if img_i.size != (w, h):
+                img_i = img_i.resize((w, h), Image.Resampling.BILINEAR)
+            if img_j.size != (w, h):
+                img_j = img_j.resize((w, h), Image.Resampling.BILINEAR)
+            diff = ImageChops.difference(img_i, img_j).convert("L")
             stat = ImageStat.Stat(diff, mask=control_mask)
             mean_diff = stat.mean[0]
 

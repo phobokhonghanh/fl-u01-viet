@@ -354,7 +354,7 @@ def download_single_enhance(
     # log(f"[DL-09] Đọc Firestore doc enhance={enhance_id}", "info")
     doc = firestore_get(f"{FLD_ENHANCES}/{enhance_id}", access_token)
     fields = doc.get("fields", {})
-    candidates = ("mergedImageUpsized", FLD_EDITED_UPSIZED, "mergedImage", FLD_EDITED, "outputImage")
+    candidates = (FLD_EDITED_UPSIZED, "mergedImageUpsized", FLD_EDITED, "mergedImage", "outputImage")
     gs_uri = ""
     for key in candidates:
         gs_uri = fields.get(key, {}).get(FLD_SV, "")
@@ -416,10 +416,10 @@ _RENDITION_CANONICAL: dict[str, str] = {
 }
 
 _DEFAULT_RENDITIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("edited", (FLD_EDITED,)),
     ("edited_upsized", (FLD_EDITED_UPSIZED,)),
-    ("merged", ("mergedImage",)),
     ("merged_upsized", ("mergedImageUpsized",)),
+    ("edited", (FLD_EDITED,)),
+    ("merged", ("mergedImage",)),
     ("output", ("outputImage",)),
 )
 
@@ -491,8 +491,21 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
             handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(tmp_path, path)
+            try:
+                os.fsync(handle.fileno())
+            except OSError:
+                pass
+        for attempt in range(5):
+            try:
+                os.replace(tmp_path, path)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    import shutil
+                    shutil.copyfile(tmp_path, path)
+                    break
+                import time
+                time.sleep(0.05)
     finally:
         tmp_path.unlink(missing_ok=True)
 
