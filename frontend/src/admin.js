@@ -66,10 +66,11 @@ function normalizeProduct(product) {
 
 function productBadge(product) {
     const value = normalizeProduct(product);
-    const labels = { autohdr: 'AutoHDR', fotello: 'Fotello' };
+    const labels = { autohdr: 'AutoHDR', fotello: 'Fotello', autoenhance: 'Autoenhance' };
     const colors = {
         autohdr: { bg: '#dbeafe', color: '#1e40af' },
         fotello: { bg: '#dcfce7', color: '#166534' },
+        autoenhance: { bg: '#fef3c7', color: '#b45309' },
     };
     const c = colors[value] || { bg: '#f1f5f9', color: '#64748b' };
     return `<span class="badge" style="background:${c.bg}; color:${c.color};">${labels[value] || escapeHtml(value)}</span>`;
@@ -416,7 +417,8 @@ function openExtendModal(name, product, level) {
     extendKeyProductInput.value = product;
     extendKeyLevelSelect.value = level || 'lite';
     extendDisplayName.innerText = name;
-    extendDisplayProduct.innerText = product === 'autohdr' ? 'AutoHDR' : 'Fotello';
+    const productLabels = { autohdr: 'AutoHDR', fotello: 'Fotello', autoenhance: 'Autoenhance' };
+    extendDisplayProduct.innerText = productLabels[product] || product;
     extendKeyModal.classList.add('is-active');
 }
 
