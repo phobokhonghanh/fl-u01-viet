@@ -13,27 +13,15 @@ from core.autoenhance.constants import DEFAULT_PROCESS_OPTIONS, PRESET_MAP
 from core.autoenhance.client import _api_post
 
 
+from core.autoenhance.options import map_user_options_to_api_payload
+
+
 def map_options_to_payload(
     options: dict[str, Any] | None,
     log_fn: Callable[[str, str], None] | None = None,
 ) -> dict[str, Any]:
     """Ánh xạ các tùy chọn sang payload hợp lệ cho Autoenhance v3."""
-    opts = options or {}
-    process_payload: dict[str, Any] = {
-        k: opts.get(k, default_val)
-        for k, default_val in DEFAULT_PROCESS_OPTIONS.items()
-    }
-
-    # Ánh xạ preset phong cách
-    preset_choice = str(opts.get("preset", "")).lower()
-    if preset_choice in PRESET_MAP:
-        process_payload["preset_id"] = PRESET_MAP[preset_choice]
-        if log_fn:
-            log_fn(f"Đã chọn preset: {preset_choice.capitalize()}", "info")
-    elif opts.get("preset_id"):
-        process_payload["preset_id"] = opts["preset_id"]
-
-    return process_payload
+    return map_user_options_to_api_payload(options, log_fn=log_fn)
 
 
 def trigger_process(

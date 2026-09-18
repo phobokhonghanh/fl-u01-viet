@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hdr_exe — Giao diện hợp nhất</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-title">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span>hdr_exe</span>
+        <span class="logo-badge">DESKTOP UI v4.0</span>
+      </div>
+    </div>
+
+    <!-- 3 Engine Tabs -->
+    <nav class="tabs-navigation">
+      <button class="engine-tab-btn active" id="tabBtn-autoenhance" onclick="switchEngineTab('autoenhance')">
+        <span>Autoenhance</span>
+        <span class="tab-status-pill idle" id="tabBadge-autoenhance">Sẵn sàng</span>
+      </button>
+      <button class="engine-tab-btn" id="tabBtn-fotello" onclick="switchEngineTab('fotello')">
+        <span>Fotello</span>
+        <span class="tab-status-pill idle" id="tabBadge-fotello">Sẵn sàng</span>
+      </button>
+      <button class="engine-tab-btn" id="tabBtn-autohdr" onclick="switchEngineTab('autohdr')">
+        <span>AutoHDR</span>
+        <span class="tab-status-pill disabled" id="tabBadge-autohdr">Chưa tích hợp</span>
+      </button>
+    </nav>
+
+    <!-- Header Actions -->
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" onclick="openOutputDirectoryCurrent()" title="Mở thư mục lưu ảnh của engine hiện tại">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span>Thư mục xuất ảnh</span>
+      </button>
+      <button class="btn btn-secondary btn-sm" onclick="openSettingsModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Cài đặt</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- App Main Body -->
+  <main class="app-body">
+
+    <!-- ==================== TAB 1: AUTOENHANCE ==================== -->
+    <section class="tab-content active" id="tabContent-autoenhance">
+      <!-- Engine Connection Bar -->
+      <div class="engine-connection-bar">
+        <div class="connection-item">
+          <span class="conn-label">Bản quyền:</span>
+          <span class="badge badge-unregistered" id="ae-license-badge">Đang kiểm tra...</span>
+          <button class="btn btn-secondary btn-sm" onclick="openLicenseModal('autoenhance')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            <span>Kích hoạt key</span>
+          </button>
+          <span class="conn-note">(Xác thực trực tuyến trước mỗi job; không dùng cache để cấp quyền)</span>
+        </div>
+        <div class="connection-item">
+          <span class="conn-label">Dịch vụ Autoenhance:</span>
+          <span class="badge badge-unregistered" id="ae-service-badge">Đang kiểm tra...</span>
+          <button class="btn btn-secondary btn-sm" onclick="openServiceModal('autoenhance')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>Đăng nhập Chrome</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Engine Workspace Two-Column -->
+      <div class="engine-workspace">
+        <!-- Left Column: Task Configuration -->
+        <div class="left-config-panel">
+          <div class="panel-header">
+            <span>Thiết lập tác vụ</span>
+            <div class="task-mode-tabs">
+              <button class="task-mode-btn active" id="ae-mode-new-btn" onclick="switchTaskMode('autoenhance', 'new')">Xử lý ảnh mới</button>
+              <button class="task-mode-btn" id="ae-mode-download-btn" onclick="switchTaskMode('autoenhance', 'download')">Tải kết quả có sẵn</button>
+            </div>
+          </div>
+
+          <div class="config-form-scrollable">
+            <!-- Thư mục lưu kết quả dùng chung (Tự động lưu cache) -->
+            <div class="common-output-dir-box">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span>Thư mục lưu kết quả</span>
+                  <span class="cache-badge" id="ae-cache-badge" title="Tự động ghi nhớ cho các lần chạy tiếp theo">💾 Tự động lưu</span>
+                </label>
+                <div class="input-with-button">
+                  <input type="text" class="form-input" id="ae-global-output-dir" value="" readonly>
+                  <button class="btn btn-secondary btn-sm" onclick="chooseOutputDir('autoenhance')">Chọn thư mục</button>
+                </div>
+                <div class="form-hint" style="font-size: 11px; margin-top: 3px; color: var(--text-muted);">
+                  Dùng chung cho cả xử lý mới và tải kết quả (kết quả tải về sẽ tự tạo thư mục con theo ID).
+                </div>
+              </div>
+            </div>
+
+            <!-- Form A: Xử lý ảnh mới -->
+            <div id="ae-form-new" style="display: flex; flex-direction: column; gap: 12px;">
+              <div class="form-group">
+                <label class="form-label">
+                  <span>Thư mục ảnh đầu vào</span>
+                  <span class="form-hint">(Hỗ trợ JPG, PNG, RAW)</span>
+                </label>
+                <div class="input-with-button">
+                  <input type="text" class="form-input" id="ae-input-path" value="" placeholder="Chọn thư mục chứa ảnh cần xử lý..." readonly>
+                  <button class="btn btn-secondary btn-sm" onclick="chooseInputFolder('autoenhance')">Chọn thư mục</button>
+                </div>
+              </div>
+
+              <!-- Standardized Autoenhance Options -->
+              <div class="form-group">
+                <label class="form-label">Phiên bản mô hình AI (AI Version)</label>
+                <select class="form-select" id="ae-ai-version-select">
+                  <option value="latest" selected>Latest (Mới nhất — Khuyên dùng)</option>
+                  <option value="stable">Stable (Bản ổn định)</option>
+                  <option value="beta">Beta (Thử nghiệm tính năng mới)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Phong cách Preset</label>
+                <select class="form-select" id="ae-preset-select">
+                  <option value="vivid" selected>Vivid (Rực rỡ, độ nét và tương phản cao — Đề xuất)</option>
+                  <option value="warm">Warm (Tông màu ấm cúng, sang trọng)</option>
+                  <option value="natural">Natural (Màu sắc trung thực, tự nhiên)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Thay thế bầu trời (Sky Replacement)</label>
+                <select class="form-select" id="ae-sky-select">
+                  <option value="clear" selected>Clear (Trời xanh trong vắt — Đề xuất)</option>
+                  <option value="low_cloud">Low Cloud (Mây thưa nhẹ)</option>
+                  <option value="neutral">Neutral (Mây trung bình tự nhiên)</option>
+                  <option value="high_cloud">High Cloud (Nhiều mây bồng bềnh)</option>
+                  <option value="off">Off (Tắt thay trời — Giữ bầu trời gốc)</option>
+                </select>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                  <input type="checkbox" id="ae-persp-check" checked>
+                  <span>Sửa phối cảnh (Perspective)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                  <input type="checkbox" id="ae-lens-check" checked>
+                  <span>Sửa méo ống kính (Lens)</span>
+                </label>
+              </div>
+
+              <!-- Collapsible AI Effects Options (All default OFF) -->
+              <div>
+                <div class="collapsible-trigger" onclick="toggleCollapsible('ae-effects-body', this)">
+                  <span>✨ Hiệu ứng nâng cao & Bảo mật (6 tùy chọn)</span>
+                  <span class="arrow">▼</span>
+                </div>
+                <div class="collapsible-body" id="ae-effects-body">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; padding: 4px 0;">
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                      <input type="checkbox" id="ae-effect-privacy">
+                      <span>Làm mờ biển số/mặt (Privacy)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                      <input type="checkbox" id="ae-effect-window">
+                      <span>Cân bằng cửa sổ (Window Pull)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                      <input type="checkbox" id="ae-effect-grass">
+                      <span>Làm xanh sân cỏ (Grass)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                      <input type="checkbox" id="ae-effect-tv">
+                      <span>Làm đen màn hình TV (TV)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                      <input type="checkbox" id="ae-effect-fireplace">
+                      <span>Thêm lửa lò sưởi (Fireplace)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                      <input type="checkbox" id="ae-effect-photographer">
+                      <span>Xóa bóng người chụp (Photographer)</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Mode Selection (Single vs Batch) -->
+              <div class="mode-selection-box">
+                <div class="form-label" style="margin-bottom: 2px;">Chế độ thực thi</div>
+                
+                <label class="radio-row">
+                  <input type="radio" name="ae-exec-mode" id="ae-radio-single" value="single" checked onchange="updateEstimation('autoenhance')">
+                  <div class="radio-text">
+                    <span class="radio-title">Single (1 Job duy nhất)</span>
+                    <span class="radio-desc">Gom tất cả ảnh vào 1 job (Tối đa 20 output).</span>
+                  </div>
+                </label>
+
+                <label class="radio-row" id="ae-radio-batch-row">
+                  <input type="radio" name="ae-exec-mode" id="ae-radio-batch" value="batch" onchange="updateEstimation('autoenhance')">
+                  <div class="radio-text">
+                    <span class="radio-title">
+                      <span>Batch (Chia nhiều Job tuần tự)</span>
+                      <span class="badge badge-plus" style="font-size: 10px; padding: 1px 5px;">PLUS</span>
+                    </span>
+                    <span class="radio-desc">Tự động chia nhỏ thành nhiều job tuần tự theo giới hạn cấu hình.</span>
+                  </div>
+                </label>
+
+                <!-- Batch Locked Warning (shown if Lite) -->
+                <div class="batch-locked-warning" id="ae-batch-locked-banner" style="display: none;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <span><strong>Gói Lite bị khóa tính năng Batch:</strong> Chỉ hỗ trợ chạy Single (tối đa 20 output). Vui lòng nâng cấp Plus để chạy Batch tự động chia job.</span>
+                </div>
+              </div>
+
+              <!-- Preflight Live Estimation Card -->
+              <div class="preflight-card">
+                <div class="preflight-title">
+                  <span>Dự toán trước khi chạy</span>
+                  <span class="badge badge-success" id="ae-est-badge" style="font-size: 10.5px;">Sẵn sàng</span>
+                </div>
+                <div class="preflight-grid">
+                  <div class="preflight-stat">
+                    <div class="stat-val" id="ae-est-inputs">0</div>
+                    <div class="stat-lbl">File đầu vào</div>
+                  </div>
+                  <div class="preflight-stat">
+                    <div class="stat-val" id="ae-est-outputs">0</div>
+                    <div class="stat-lbl">Output dự kiến</div>
+                  </div>
+                  <div class="preflight-stat">
+                    <div class="stat-val" id="ae-est-jobs">0 Job</div>
+                    <div class="stat-lbl">Số Job chia</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Form B: Tải kết quả có sẵn -->
+            <div id="ae-form-download" style="display: none; flex-direction: column; gap: 12px;">
+              <div class="form-group">
+                <label class="form-label">
+                  <span>Mã đơn hàng (Order ID)</span>
+                  <span class="form-hint">(Lấy từ Autoenhance Portal)</span>
+                </label>
+                <input type="text" class="form-input" id="ae-order-id-input" placeholder="Nhập Order ID, ví dụ: ord_ae_991823">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Định dạng ảnh tải về</label>
+                <select class="form-select" id="ae-dl-format">
+                  <option value="jpeg" selected>JPEG sắc nét (Enhanced High Quality)</option>
+                  <option value="raw_tiff">TIFF 16-bit (Ảnh gốc không nén)</option>
+                </select>
+              </div>
+
+              <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: var(--radius-sm); padding: 8px 10px; font-size: 11.5px; color: var(--text-muted); line-height: 1.4;">
+                ℹ️ <strong>Lưu ý:</strong> Kết quả tải về sẽ tạo thành 1 Job tải trong danh sách Jobs và lưu vào thư mục con theo Order ID tại <code>{Thư_mục_lưu}/{order_id}</code>. Không áp giới hạn 20/60 output.
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+                <button class="btn btn-primary btn-sm" onclick="startDownloadOrderAsJob('autoenhance')">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>Tải đơn hàng này (Tạo Job)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Action Buttons -->
+          <div class="form-actions-footer">
+            <div style="font-size: 11.5px; color: var(--text-muted);" id="ae-footer-status">
+              Sẵn sàng tạo tác vụ
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-danger btn-sm" id="ae-stop-btn" onclick="stopEngineBatch('autoenhance')" style="display: none;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                <span>Dừng tác vụ</span>
+              </button>
+              <button class="btn btn-primary" id="ae-run-btn" onclick="startEngineTask('autoenhance')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Bắt đầu xử lý</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Execution, Jobs List & Active Job Details -->
+        <div class="right-exec-panel">
+          <div class="exec-top-header">
+            <div class="exec-top-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span>Danh sách Jobs</span>
+              <span class="badge badge-queued" id="ae-batch-badge">Chưa chạy</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <span style="font-size: 11.5px; color: var(--text-muted);" id="ae-jobs-summary-text">0/0 jobs</span>
+            </div>
+          </div>
+
+          <div class="exec-workspace-split">
+            <!-- Jobs Table -->
+            <div class="jobs-table-container">
+              <table class="app-table" id="ae-jobs-table">
+                <thead>
+                  <tr>
+                    <th style="width: 110px;">Job ID</th>
+                    <th style="width: 80px;">Lần chạy</th>
+                    <th style="width: 85px;">Output</th>
+                    <th>Bước hiện tại</th>
+                    <th style="width: 110px;">Trạng thái</th>
+                    <th style="width: 140px; text-align: right;">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="ae-jobs-tbody">
+                  <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-subtle); padding: 24px;">
+                      Chưa có job nào trong đợt này. Nhấn "Bắt đầu xử lý" để khởi tạo.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Active Job Details View -->
+            <div class="active-job-details" id="ae-job-detail-card" style="display: none;">
+              <!-- Restart Reason Banner (when job failed/cancelled) -->
+              <div class="restart-banner" id="ae-restart-banner" style="display: none;">
+                <div class="restart-text">
+                  <strong id="ae-restart-title">Chạy lại job:</strong>
+                  <span id="ae-restart-desc">Lý do cụ thể của restart.</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="ae-restart-btn-action" onclick="restartSelectedJob('autoenhance')">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  <span>Khởi động lại Job</span>
+                </button>
+              </div>
+
+              <div class="job-details-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <strong id="ae-detail-job-id">job_001</strong>
+                  <span class="badge badge-lite" id="ae-detail-attempt-badge">Lần chạy 1</span>
+                  <span style="font-size: 11px; color: var(--text-muted);" id="ae-detail-outputs-text">0 outputs</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div class="job-details-tabs">
+                    <button class="job-tab-btn active" id="ae-panebtn-steps" onclick="switchJobPane('autoenhance', 'steps')">Tiến trình</button>
+                    <button class="job-tab-btn" id="ae-panebtn-outputs" onclick="switchJobPane('autoenhance', 'outputs')">Outputs (<span id="ae-detail-outputs-count">0</span>)</button>
+                    <button class="job-tab-btn" id="ae-panebtn-logs" onclick="switchJobPane('autoenhance', 'logs')">Log chi tiết</button>
+                  </div>
+                  <button class="btn btn-secondary btn-sm" onclick="openActiveJobFolder('autoenhance')" title="Mở thư mục lưu ảnh của Job">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span>Mở thư mục</span>
+                  </button>
+                  <button class="btn btn-secondary btn-sm" onclick="openManifestHistoryModal('autoenhance')" title="Xem Manifest JSON và lịch sử attempts">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    <span>Lịch sử & Manifest</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Pane 1: Steps Stepper -->
+              <div class="job-tab-pane active" id="ae-pane-steps">
+                <div class="steps-stepper" id="ae-steps-container">
+                  <!-- Generated dynamically via JS -->
+                </div>
+              </div>
+
+              <!-- Pane 2: Outputs Table -->
+              <div class="job-tab-pane" id="ae-pane-outputs">
+                <div class="outputs-list-table">
+                  <table class="app-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 90px;">Output ID</th>
+                        <th>Tệp đầu vào</th>
+                        <th>Tệp kết quả</th>
+                        <th style="width: 100px;">Trạng thái</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ae-outputs-tbody">
+                      <!-- Generated dynamically -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Pane 3: Log Console -->
+              <div class="job-tab-pane" id="ae-pane-logs">
+                <div class="log-console-container">
+                  <div class="log-console-toolbar">
+                    <span>Terminal Log — Autoenhance Sequential Runner</span>
+                    <div style="display: flex; gap: 8px;">
+                      <a href="javascript:void(0)" onclick="clearLogs('autoenhance')" style="color: #94a3b8; text-decoration: none;">Xóa log</a>
+                      <a href="javascript:void(0)" onclick="copyLogs('autoenhance')" style="color: #94a3b8; text-decoration: none;">Sao chép</a>
+                    </div>
+                  </div>
+                  <div class="log-entries" id="ae-log-entries">
+                    <!-- Logs dynamically appended -->
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: FOTELLO ==================== -->
+    <section class="tab-content" id="tabContent-fotello">
+      <!-- Engine Connection Bar -->
+      <div class="engine-connection-bar">
+        <div class="connection-item">
+          <span class="conn-label">Bản quyền:</span>
+          <span class="badge badge-unregistered" id="fo-license-badge">Đang kiểm tra...</span>
+          <button class="btn btn-secondary btn-sm" onclick="openLicenseModal('fotello')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            <span>Kích hoạt key</span>
+          </button>
+          <span class="conn-note">(Xác thực trực tuyến trước mỗi job; không dùng cache để cấp quyền)</span>
+        </div>
+        <div class="connection-item">
+          <span class="conn-label">Dịch vụ Fotello:</span>
+          <span class="badge badge-unregistered" id="fo-service-badge">Đang kiểm tra...</span>
+          <button class="btn btn-secondary btn-sm" onclick="openServiceModal('fotello')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>Đăng nhập Chrome</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Engine Workspace Two-Column -->
+      <div class="engine-workspace">
+        <!-- Left Column: Task Configuration -->
+        <div class="left-config-panel">
+          <div class="panel-header">
+            <span>Thiết lập tác vụ Fotello</span>
+            <div class="task-mode-tabs">
+              <button class="task-mode-btn active" id="fo-mode-new-btn" onclick="switchTaskMode('fotello', 'new')">Xử lý ảnh mới</button>
+              <button class="task-mode-btn" id="fo-mode-download-btn" onclick="switchTaskMode('fotello', 'download')">Tải kết quả có sẵn</button>
+            </div>
+          </div>
+
+          <div class="config-form-scrollable">
+            <!-- Thư mục lưu kết quả dùng chung (Tự động lưu cache) -->
+            <div class="common-output-dir-box">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span>Thư mục lưu kết quả</span>
+                  <span class="cache-badge" id="fo-cache-badge" title="Tự động ghi nhớ cho các lần chạy tiếp theo">💾 Tự động lưu</span>
+                </label>
+                <div class="input-with-button">
+                  <input type="text" class="form-input" id="fo-global-output-dir" value="" readonly>
+                  <button class="btn btn-secondary btn-sm" onclick="chooseOutputDir('fotello')">Chọn thư mục</button>
+                </div>
+                <div class="form-hint" style="font-size: 11px; margin-top: 3px; color: var(--text-muted);">
+                  Dùng chung cho cả xử lý mới và tải kết quả (mỗi listing sẽ tự tạo thư mục con theo ID).
+                </div>
+              </div>
+            </div>
+
+            <!-- Form A: Xử lý ảnh mới -->
+            <div id="fo-form-new" style="display: flex; flex-direction: column; gap: 12px;">
+              <div class="form-group">
+                <label class="form-label">
+                  <span>Thư mục ảnh Bracket đầu vào</span>
+                  <span class="form-hint">(Tự động ghép EV theo bracket)</span>
+                </label>
+                <div class="input-with-button">
+                  <input type="text" class="form-input" id="fo-input-path" value="" placeholder="Chọn thư mục chứa ảnh bracket..." readonly>
+                  <button class="btn btn-secondary btn-sm" onclick="chooseInputFolder('fotello')">Chọn thư mục</button>
+                </div>
+              </div>
+
+              <!-- Standardized Fotello Options -->
+              <div class="form-group">
+                <label class="form-label">Số ảnh mỗi Bracket (Bracket Size)</label>
+                <select class="form-select" id="fo-bracket-select" onchange="updateEstimation('fotello')">
+                  <option value="1">1 ảnh / 1 bracket (Single exposure HDR)</option>
+                  <option value="3" selected>3 ảnh / 1 bracket (Tiêu chuẩn -2, 0, +2 EV)</option>
+                  <option value="5">5 ảnh / 1 bracket (Mở rộng 5 EV)</option>
+                  <option value="7">7 ảnh / 1 bracket (Mở rộng chuyên sâu 7 EV)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Phong cách tương phát (Contrast Style)</label>
+                <select class="form-select" id="fo-contrast-select">
+                  <option value="signature" selected>Signature (Cân bằng & sắc nét tự nhiên — Đề xuất)</option>
+                  <option value="natural">Natural (Dịu nhẹ, màu sắc trung thực)</option>
+                  <option value="dramatic">Dramatic (Độ tương phản cao, ấn tượng)</option>
+                  <option value="twilight">Twilight (Ánh sáng hoàng hôn & chạng vạng)</option>
+                </select>
+              </div>
+
+              <!-- Sky Replacement & Cloud Style -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div class="form-group">
+                  <label class="form-label">Thay thế bầu trời</label>
+                  <select class="form-select" id="fo-sky-select" onchange="handleFotelloSkyToggle()">
+                    <option value="on" selected>Bật (Thay trời tự động)</option>
+                    <option value="off">Tắt (Giữ bầu trời gốc)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Kiểu mây (Cloud Style)</label>
+                  <select class="form-select" id="fo-cloud-select">
+                    <option value="original">Original (Bầu trời gốc)</option>
+                    <option value="full_house_puffs" selected>Full house puffs (Bồng bềnh phủ rộng)</option>
+                    <option value="open_house_puffs">Open house puffs (Cụm mây nhẹ)</option>
+                    <option value="streaks_and_puffs">Streaks & puffs (Vệt xen cụm)</option>
+                    <option value="sweep_streaks">Sweep streaks (Vệt quét dài)</option>
+                    <option value="scatter_streaks">Scatter streaks (Vệt rải rác)</option>
+                    <option value="crisp_streaks">Crisp streaks (Vệt sắc nét)</option>
+                    <option value="clear_fade">Clear fade (Mây mờ nhạt dần)</option>
+                  </select>
+                </div>
+              </div>
+              <div id="fo-sky-off-hint" style="display: none; font-size: 11px; color: var(--text-muted); margin-top: -6px; margin-bottom: 4px;">
+                ℹ️ Đã tắt thay trời: <code>cloud_style</code> tự động loại bỏ khỏi payload để tránh kích hoạt lại.
+              </div>
+
+              <!-- Listing Name Prefix & Perspective -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div class="form-group">
+                  <label class="form-label">Tiền tố tên Listing</label>
+                  <input type="text" class="form-input" id="fo-listing-prefix" value="HDR Upload">
+                </div>
+                <div class="form-group" style="display: flex; flex-direction: column; justify-content: flex-end;">
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; padding-bottom: 8px;">
+                    <input type="checkbox" id="fo-persp-check">
+                    <span>Sửa góc phối cảnh (Perspective)</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Rendition & Upsize -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div class="form-group">
+                  <label class="form-label">Độ phân giải (Rendition)</label>
+                  <select class="form-select" id="fo-rendition-select">
+                    <option value="web" selected>Web (Xem & đăng nhanh)</option>
+                    <option value="highres">High-res (In ấn chất lượng cao)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Tăng kích thước (Upsize)</label>
+                  <select class="form-select" id="fo-upsize-select">
+                    <option value="1x" selected>Không upsize (1x)</option>
+                    <option value="2x">Upsize 2x (Siêu phân giải AI)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Mode Selection (Single vs Batch) -->
+              <div class="mode-selection-box">
+                <div class="form-label" style="margin-bottom: 2px;">Chế độ thực thi</div>
+                
+                <label class="radio-row">
+                  <input type="radio" name="fo-exec-mode" id="fo-radio-single" value="single" checked onchange="updateEstimation('fotello')">
+                  <div class="radio-text">
+                    <span class="radio-title">Single (1 Job duy nhất)</span>
+                    <span class="radio-desc">Gom tất cả bracket vào 1 job (Tối đa 15 output).</span>
+                  </div>
+                </label>
+
+                <label class="radio-row" id="fo-radio-batch-row">
+                  <input type="radio" name="fo-exec-mode" id="fo-radio-batch" value="batch" onchange="updateEstimation('fotello')">
+                  <div class="radio-text">
+                    <span class="radio-title">
+                      <span>Batch (Chia nhiều Job tuần tự)</span>
+                      <span class="badge badge-plus" style="font-size: 10px; padding: 1px 5px;">PLUS</span>
+                    </span>
+                    <span class="radio-desc">Tự động chia nhỏ thành các job tuần tự theo số bracket.</span>
+                  </div>
+                </label>
+
+                <!-- Batch Locked Warning (shown if Lite) -->
+                <div class="batch-locked-warning" id="fo-batch-locked-banner" style="display: none;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <span><strong>Gói Lite bị khóa tính năng Batch:</strong> Chỉ hỗ trợ chạy Single (tối đa 15 output). Vui lòng nâng cấp Plus để chạy Batch tự động chia job.</span>
+                </div>
+              </div>
+
+              <!-- Preflight Live Estimation Card -->
+              <div class="preflight-card">
+                <div class="preflight-title">
+                  <span>Dự toán trước khi chạy (Tính theo Bracket)</span>
+                  <span class="badge badge-success" id="fo-est-badge" style="font-size: 10.5px;">Sẵn sàng</span>
+                </div>
+                <div class="preflight-grid">
+                  <div class="preflight-stat">
+                    <div class="stat-val" id="fo-est-inputs">0</div>
+                    <div class="stat-lbl">File đầu vào</div>
+                  </div>
+                  <div class="preflight-stat">
+                    <div class="stat-val" id="fo-est-outputs">0</div>
+                    <div class="stat-lbl">Output (3 ảnh/bracket)</div>
+                  </div>
+                  <div class="preflight-stat">
+                    <div class="stat-val" id="fo-est-jobs">0 Job</div>
+                    <div class="stat-lbl">Số Job chia</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Form B: Tải kết quả có sẵn (Listing Browser & Batch Download) -->
+            <div id="fo-form-download" style="display: none; flex-direction: column; gap: 10px;">
+              <!-- Toolbar: Search & Refresh -->
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <div style="flex: 1; position: relative;">
+                  <input type="text" class="form-input" id="fo-listings-search" placeholder="🔍 Tìm theo tên listing hoặc ID..." oninput="filterFotelloListings()">
+                </div>
+                <select class="form-select" id="fo-listings-filter" style="width: 110px;" onchange="filterFotelloListings()">
+                  <option value="all" selected>Tất cả</option>
+                  <option value="completed">Hoàn tất</option>
+                  <option value="partial">Một phần</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" onclick="refreshFotelloListings()" title="Tải lại danh sách listing từ Firestore qua cursor pagination">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  <span>Làm mới</span>
+                </button>
+              </div>
+
+              <!-- Listings Scrollable Table -->
+              <div class="listings-table-wrapper">
+                <table class="app-table" style="font-size: 11.5px;">
+                  <thead>
+                    <tr>
+                      <th style="width: 28px; text-align: center;"><input type="checkbox" id="fo-select-all-listings" onchange="toggleSelectAllListings(this.checked)"></th>
+                      <th>Tên Listing</th>
+                      <th style="width: 80px;">Ngày tạo</th>
+                      <th style="width: 65px; text-align: center;">Outputs</th>
+                      <th style="width: 80px; text-align: center;">Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody id="fo-listings-tbody">
+                    <tr>
+                      <td colspan="5" style="text-align: center; color: var(--text-subtle); padding: 20px;">
+                        Đang kết nối Firestore...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Download Settings & Sequential Subfolder Info -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div class="form-group">
+                  <label class="form-label">Rendition tải về</label>
+                  <select class="form-select" id="fo-dl-rendition">
+                    <option value="highres" selected>High-res Print (Chất lượng cao)</option>
+                    <option value="web">Web Preview (Xem nhanh)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Tăng kích thước (Upsize)</label>
+                  <select class="form-select" id="fo-dl-upsize">
+                    <option value="original" selected>Ảnh gốc (1x)</option>
+                    <option value="upsized_2x">Ảnh đã AI Upsize 2x</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: var(--radius-sm); padding: 8px 10px; font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+                ℹ️ <strong>Tải nhiều listing:</strong> Tải tuần tự vào thư mục con riêng theo ID tại <code>{Thư_mục_lưu}/{listing_id}</code>. Không áp giới hạn 20/60 output, tự động xuất <code>batch_listings_manifest.json</code>.
+              </div>
+
+              <!-- Batch Download Action Bar -->
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 4px;">
+                <div style="font-size: 11.5px; font-weight: 600;" id="fo-selected-listings-count">
+                  Đã chọn: 0 listing (0 ảnh)
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="openOutputDirectoryCurrent()">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  <span>Mở thư mục tổng</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Action Buttons -->
+          <div class="form-actions-footer">
+            <div style="font-size: 11.5px; color: var(--text-muted);" id="fo-footer-status">
+              Sẵn sàng tạo tác vụ Fotello
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-danger btn-sm" id="fo-stop-btn" onclick="stopEngineBatch('fotello')" style="display: none;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                <span>Dừng tác vụ</span>
+              </button>
+              <button class="btn btn-primary" id="fo-run-btn" onclick="startEngineTask('fotello')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Bắt đầu xử lý</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Execution, Jobs List & Active Job Details -->
+        <div class="right-exec-panel">
+          <div class="exec-top-header">
+            <div class="exec-top-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span>Danh sách Jobs Fotello</span>
+              <span class="badge badge-queued" id="fo-batch-badge">Chưa chạy</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <span style="font-size: 11.5px; color: var(--text-muted);" id="fo-jobs-summary-text">0/0 jobs</span>
+            </div>
+          </div>
+
+          <div class="exec-workspace-split">
+            <!-- Jobs Table -->
+            <div class="jobs-table-container">
+              <table class="app-table" id="fo-jobs-table">
+                <thead>
+                  <tr>
+                    <th style="width: 110px;">Job ID</th>
+                    <th style="width: 80px;">Lần chạy</th>
+                    <th style="width: 85px;">Output</th>
+                    <th>Bước hiện tại</th>
+                    <th style="width: 110px;">Trạng thái</th>
+                    <th style="width: 140px; text-align: right;">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="fo-jobs-tbody">
+                  <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-subtle); padding: 24px;">
+                      Chưa có job nào trong đợt này. Nhấn "Bắt đầu xử lý" để khởi tạo.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Active Job Details View -->
+            <div class="active-job-details" id="fo-job-detail-card" style="display: none;">
+              <!-- Restart Reason Banner (when job failed/cancelled) -->
+              <div class="restart-banner" id="fo-restart-banner" style="display: none;">
+                <div class="restart-text">
+                  <strong id="fo-restart-title">Chạy lại job:</strong>
+                  <span id="fo-restart-desc">Lý do cụ thể của restart.</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="fo-restart-btn-action" onclick="restartSelectedJob('fotello')">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  <span>Khởi động lại Job</span>
+                </button>
+              </div>
+
+              <div class="job-details-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <strong id="fo-detail-job-id">job_001</strong>
+                  <span class="badge badge-lite" id="fo-detail-attempt-badge">Lần chạy 1</span>
+                  <span style="font-size: 11px; color: var(--text-muted);" id="fo-detail-outputs-text">0 outputs</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div class="job-details-tabs">
+                    <button class="job-tab-btn active" id="fo-panebtn-steps" onclick="switchJobPane('fotello', 'steps')">Tiến trình</button>
+                    <button class="job-tab-btn" id="fo-panebtn-outputs" onclick="switchJobPane('fotello', 'outputs')">Outputs (<span id="fo-detail-outputs-count">0</span>)</button>
+                    <button class="job-tab-btn" id="fo-panebtn-logs" onclick="switchJobPane('fotello', 'logs')">Log chi tiết</button>
+                  </div>
+                  <button class="btn btn-secondary btn-sm" onclick="openActiveJobFolder('fotello')" title="Mở thư mục lưu ảnh của Job">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span>Mở thư mục</span>
+                  </button>
+                  <button class="btn btn-secondary btn-sm" onclick="openManifestHistoryModal('fotello')" title="Xem Manifest JSON và lịch sử attempts">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    <span>Lịch sử & Manifest</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Pane 1: Steps Stepper -->
+              <div class="job-tab-pane active" id="fo-pane-steps">
+                <div class="steps-stepper" id="fo-steps-container">
+                  <!-- Generated dynamically via JS -->
+                </div>
+              </div>
+
+              <!-- Pane 2: Outputs Table -->
+              <div class="job-tab-pane" id="fo-pane-outputs">
+                <div class="outputs-list-table">
+                  <table class="app-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 90px;">Bracket ID</th>
+                        <th>Ảnh trong Bracket (EV)</th>
+                        <th>File HDR Kết quả</th>
+                        <th style="width: 100px;">Trạng thái</th>
+                      </tr>
+                    </thead>
+                    <tbody id="fo-outputs-tbody">
+                      <!-- Generated dynamically -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Pane 3: Log Console -->
+              <div class="job-tab-pane" id="fo-pane-logs">
+                <div class="log-console-container">
+                  <div class="log-console-toolbar">
+                    <span>Terminal Log — Fotello Sequential Runner</span>
+                    <div style="display: flex; gap: 8px;">
+                      <a href="javascript:void(0)" onclick="clearLogs('fotello')" style="color: #94a3b8; text-decoration: none;">Xóa log</a>
+                      <a href="javascript:void(0)" onclick="copyLogs('fotello')" style="color: #94a3b8; text-decoration: none;">Sao chép</a>
+                    </div>
+                  </div>
+                  <div class="log-entries" id="fo-log-entries">
+                    <!-- Logs dynamically appended -->
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: AUTOHDR (CHƯA TÍCH HỢP) ==================== -->
+    <section class="tab-content" id="tabContent-autohdr">
+      <!-- Engine Connection Bar for AutoHDR (Allows testing License activation) -->
+      <div class="engine-connection-bar">
+        <div class="connection-item">
+          <span class="conn-label">Bản quyền AutoHDR:</span>
+          <span class="badge badge-unregistered" id="ah-license-badge">Đang kiểm tra...</span>
+          <button class="btn btn-secondary btn-sm" onclick="openLicenseModal('autohdr')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            <span>Kích hoạt key</span>
+          </button>
+        </div>
+        <div class="connection-item">
+          <span class="conn-label">Trạng thái tích hợp:</span>
+          <span class="badge badge-cancelled">Core chưa tích hợp</span>
+        </div>
+      </div>
+
+      <div class="unintegrated-container">
+        <div class="unintegrated-card">
+          <div class="unintegrated-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          </div>
+          <h2 class="unintegrated-title">Engine AutoHDR — Đang trong lộ trình tích hợp</h2>
+          <p class="unintegrated-desc">
+            Hiện tại engine AutoHDR đang hoàn thiện phần lõi ghép ảnh HDR nội bộ.<br>
+            Cơ chế kích hoạt bản quyền độc lập và phân quyền Job đã được chuẩn bị sẵn sàng.
+          </p>
+
+          <div class="unintegrated-box">
+            <strong>Trạng thái chuẩn bị:</strong>
+            <ul>
+              <li>✅ Bản quyền & phân quyền: Hỗ trợ key riêng biệt và phân quyền Lite/Plus.</li>
+              <li>✅ Quy tắc Runner & Manifest: Đã sẵn sàng tương thích với JobPlanner.</li>
+              <li>⏳ Lõi thuật toán xử lý ảnh HDR: Sẽ được nối vào trong giai đoạn tiếp theo.</li>
+            </ul>
+          </div>
+
+          <div style="font-size: 12px; color: var(--text-subtle);">
+            Màn hình thông báo tuân thủ quy định: Không cung cấp nút chạy giả hay form tạo job giả.
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- Modal 1: License Activation -->
+  <div class="modal-overlay" id="modal-license">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span id="lic-modal-title">Kích hoạt bản quyền</span>
+        <button class="modal-close-btn" onclick="closeModal('modal-license')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size: 12.5px; color: var(--text-muted);">
+          Nhập mã bản quyền (License Key) cho engine <strong id="lic-modal-engine-name">Autoenhance</strong>. Key sẽ được xác thực trực tuyến qua máy chủ bản quyền.
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Mã kích hoạt (License Key)</label>
+          <input type="password" class="form-input" id="lic-input-key" placeholder="Nhập key của bạn...">
+          <div class="key-quick-preset-btns">
+            <span style="font-size: 11px; color: var(--text-muted); line-height: 22px;">Dán nhanh key mẫu:</span>
+            <button class="btn btn-secondary btn-sm" onclick="setPresetKey('KEY-LITE-998822')">Key gói LITE</button>
+            <button class="btn btn-secondary btn-sm" onclick="setPresetKey('KEY-PLUS-776655')">Key gói PLUS</button>
+          </div>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-sm); padding: 10px; font-size: 11.5px; color: var(--text-muted);">
+          🔒 <strong>Bảo mật:</strong> Mã key được che ký tự, không hiển thị lại key đã lưu trên giao diện. Máy tính được liên kết theo Hardware Machine ID duy nhất (<span id="lic-machine-id">...</span>).
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="submitClearLicense()">Hủy kích hoạt</button>
+        <button class="btn btn-secondary" onclick="closeModal('modal-license')">Đóng</button>
+        <button class="btn btn-primary" id="lic-submit-btn" onclick="submitActivateLicense()">Xác thực & Kích hoạt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Service Chrome Login -->
+  <div class="modal-overlay" id="modal-service">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span id="service-modal-title">Đăng nhập dịch vụ qua Chrome</span>
+        <button class="modal-close-btn" onclick="closeModal('modal-service')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size: 12.5px; color: var(--text-muted);">
+          Ứng dụng sử dụng luồng trình duyệt Chrome hiện có của bạn để đăng nhập dịch vụ.
+        </div>
+
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: #166534;" id="service-modal-info-box">
+          <strong id="service-modal-status-text">Đang kiểm tra kết nối...</strong><br>
+          <span style="color: #4b5563; font-size: 11px;" id="service-modal-detail-text">Chrome Session tự động lưu session cookies, không hiển thị token nhạy cảm.</span>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">
+          Khi nhấn <strong>"Mở Chrome đăng nhập"</strong>, cửa sổ trình duyệt Chrome sẽ được khởi động với cổng điều khiển DevTools (CDP). Sau khi bạn đăng nhập thành công vào website của dịch vụ, phiên làm việc sẽ tự động liên kết với hdr_exe.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-service')">Đóng</button>
+        <button class="btn btn-primary" id="service-connect-btn" onclick="submitConnectService()">Mở Chrome đăng nhập</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Settings -->
+  <div class="modal-overlay" id="modal-settings">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span>Cài đặt hệ thống hdr_exe</span>
+        <button class="modal-close-btn" onclick="closeModal('modal-settings')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Thư mục xuất Autoenhance mặc định</label>
+          <div class="input-with-button">
+            <input type="text" class="form-input" id="setting-ae-dir" readonly>
+            <button class="btn btn-secondary btn-sm" onclick="chooseSettingDir('autoenhance')">Chọn</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Thư mục xuất Fotello mặc định</label>
+          <div class="input-with-button">
+            <input type="text" class="form-input" id="setting-fo-dir" readonly>
+            <button class="btn btn-secondary btn-sm" onclick="chooseSettingDir('fotello')">Chọn</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Thời gian chờ tối đa cho bước Polling (giây)</label>
+          <input type="number" class="form-input" id="setting-timeout" value="600">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Giới hạn Output / Job (Lite: Tối đa 20 / Plus: Không giới hạn)</label>
+          <input type="number" class="form-input" value="20" readonly>
+          <span class="form-hint">Cố định theo quy định cấp phép của hệ thống.</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-settings')">Hủy</button>
+        <button class="btn btn-primary" onclick="saveSettings()">Lưu cài đặt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 4: Manifest & Attempt History Modal -->
+  <div class="modal-overlay" id="modal-manifest">
+    <div class="modal-dialog" style="width: 680px;">
+      <div class="modal-header">
+        <span>Lịch sử Attempt & Báo cáo Manifest Job</span>
+        <button class="modal-close-btn" onclick="closeModal('modal-manifest')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong id="mnf-job-id" style="font-size: 14px;">job_001</strong>
+            <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;" id="mnf-engine-name">Engine: Autoenhance</span>
+          </div>
+          <div style="display: flex; gap: 4px;" id="mnf-attempt-selector">
+            <!-- Buttons for Attempt 1, Attempt 2... -->
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; font-size: 12px; background: var(--bg-subtle); padding: 8px 10px; border-radius: var(--radius-sm);">
+          <div>Trạng thái: <span class="badge badge-success" id="mnf-status-badge">Hoàn tất</span></div>
+          <div>Bước kết thúc: <strong id="mnf-step-name">export</strong></div>
+          <div>Thành công: <strong id="mnf-stat-success">0/0</strong></div>
+          <div>Lỗi: <strong id="mnf-stat-failed">0</strong></div>
+        </div>
+
+        <div class="form-label">Dữ liệu Manifest JSON (Chuẩn ghi nhận attempt):</div>
+        <pre class="manifest-code-block" id="mnf-json-viewer"></pre>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="copyManifestJson()">Sao chép JSON</button>
+        <button class="btn btn-secondary" onclick="closeModal('modal-manifest')">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

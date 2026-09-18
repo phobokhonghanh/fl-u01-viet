@@ -11,5 +11,14 @@ config.json
 .autoenhance_token.json
 .autoenhance_meta/
 /docs
-/examples
 TODO.md
+
+# Runtime outputs and temporary directories
+examples/
+output/
+.chrome_profile/
+*.log
+.fotello_dl_*
+# Local development environment
+.venv/
+.ruff_cache/

@@ -1,6 +1,14 @@
 {
+  "shared": {
+    "chrome_debugging_port": 9222,
+    "timeout_seconds": 60
+  },
+  "licensing": {
+    "server_url": "",
+    "timeout_seconds": 10
+  },
   "autoenhance": {
-    "api_base": "https://api.autoenhance.ai/v3",
+    "api_base": "",
     "max_api_workers": 4,
     "max_download_workers": 4,
     "request_timeout_seconds": 60

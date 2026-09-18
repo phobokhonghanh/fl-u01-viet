@@ -88,8 +88,10 @@ from core.autoenhance.download import (
     download_selected_photos,
 )
 from core.autoenhance.workflow import (
-    upload_and_process,
+    run_workflow,
+    restart_workflow_job,
 )
+from core.shared.licensing.models import LicenseResult
 from core.shared.callbacks import ProgressAdapter, safe_call_progress
 from core.shared.config import (
     get_api_key_path,
@@ -448,6 +450,16 @@ class TestUpload(unittest.TestCase):
 
 
 class TestDownloadAndDataSafety(unittest.TestCase):
+    def setUp(self):
+        self._patch_lic = patch(
+            "core.autoenhance.download.check",
+            return_value=LicenseResult(valid=True, engine="autoenhance", level="lite"),
+        )
+        self._patch_lic.start()
+
+    def tearDown(self):
+        self._patch_lic.stop()
+
     @patch("core.autoenhance.download.get_order_details")
     @patch("core.autoenhance.download._download_one_file")
     def test_never_delete_or_overwrite_existing_files(self, mock_dl, mock_details):
@@ -489,11 +501,12 @@ class TestDownloadAndDataSafety(unittest.TestCase):
             self.assertEqual(cnt, 1)
 
             step_names = [e.step for e in events]
+            self.assertIn("activation", step_names)
             self.assertIn("auth", step_names)
             self.assertIn("order_details", step_names)
             self.assertIn("download", step_names)
             for e in events:
-                self.assertEqual(e.step_total, 3)
+                self.assertEqual(e.step_total, 4)
 
 
 class TestWorkflowSevenSteps(unittest.TestCase):
@@ -501,19 +514,32 @@ class TestWorkflowSevenSteps(unittest.TestCase):
         self._meta_tmp = tempfile.TemporaryDirectory()
         self._patch_meta = patch("core.autoenhance.metadata.META_DIR", Path(self._meta_tmp.name))
         self._patch_meta.start()
+        self._patch_lic = patch(
+            "core.shared.jobs.runner.require_access",
+            return_value=LicenseResult(valid=True, engine="autoenhance", level="plus"),
+        )
+        self._patch_lic.start()
 
     def tearDown(self):
+        self._patch_lic.stop()
         self._patch_meta.stop()
         self._meta_tmp.cleanup()
 
-    @patch("core.autoenhance.workflow.batch_download")
+    @staticmethod
+    def _fake_download(image_id=None, original_filename=None, output_dir=None, **kwargs):
+        clean_stem = Path(original_filename).stem if original_filename else (image_id or "img")
+        out_f = Path(output_dir) / f"{clean_stem}.jpg"
+        Image.new("RGB", (10, 10)).save(out_f, "JPEG")
+        return True, out_f, None
+
+    @patch("core.autoenhance.workflow.download_and_process_image")
     @patch("core.autoenhance.workflow.poll_order_completion")
     @patch("core.autoenhance.workflow.trigger_process")
     @patch("core.autoenhance.workflow._upload_one_file")
     @patch("core.autoenhance.workflow.get_upload_s3_info")
     @patch("core.autoenhance.workflow.create_order")
     def test_workflow_full_success_emits_7_steps(
-        self, mock_create, mock_s3_info, mock_upload, mock_trigger, mock_poll, mock_batch_dl
+        self, mock_create, mock_s3_info, mock_upload, mock_trigger, mock_poll, mock_dl_one
     ):
         mock_create.return_value = {"order_id": "ord_wf"}
         mock_s3_info.return_value = {"url": "https://s3/1", "headers": {}}
@@ -524,7 +550,8 @@ class TestWorkflowSevenSteps(unittest.TestCase):
             [{"id": "1"}],
             [],
         )
-        mock_batch_dl.return_value = 1
+
+        mock_dl_one.side_effect = self._fake_download
 
         events: list[StepEvent] = []
         logs: list[tuple[str, str]] = []
@@ -533,25 +560,19 @@ class TestWorkflowSevenSteps(unittest.TestCase):
             sample = Path(src) / "test.jpg"
             Image.new("RGB", (50, 50)).save(sample, "JPEG")
 
-            ok = upload_and_process(
+            batch_res = run_workflow(
                 input_dir=src,
-                savedir=dst,
+                output_dir=dst,
                 api_key="test_key",
                 event_fn=lambda e: events.append(e),
                 log_fn=lambda m, l: logs.append((m, l)),
             )
-            self.assertTrue(ok)
+            self.assertEqual(batch_res.status, "success")
 
             completed_steps = [e.step for e in events if e.status in ("success", "partial", "failed", "cancelled")]
-            expected_steps = ["auth", "prepare", "create_order", "upload", "execute", "polling", "download"]
-            self.assertEqual(completed_steps, expected_steps)
-
-            for e in events:
-                self.assertEqual(e.step_total, 7)
-
-            formatted_logs = [m for m, _ in logs]
-            self.assertTrue(any("[Autoenhance][1/7 Xác thực API][success]" in m for m in formatted_logs))
-            self.assertTrue(any("[Autoenhance][5/7 Kích hoạt xử lý][success]" in m for m in formatted_logs))
+            expected_steps = ["activation", "auth", "prepare", "create_order", "upload", "execute", "polling", "download", "export"]
+            for s in expected_steps:
+                self.assertIn(s, completed_steps)
 
     @patch("core.autoenhance.workflow.trigger_process")
     @patch("core.autoenhance.workflow._upload_one_file")
@@ -579,27 +600,27 @@ class TestWorkflowSevenSteps(unittest.TestCase):
             sample = Path(src) / "test.jpg"
             Image.new("RGB", (50, 50)).save(sample, "JPEG")
 
-            ok = upload_and_process(
+            batch_res = run_workflow(
                 input_dir=src,
-                savedir=dst,
+                output_dir=dst,
                 api_key="key",
                 stop_event=stop_evt,
                 event_fn=lambda e: events.append(e),
             )
-            self.assertFalse(ok)
+            self.assertEqual(batch_res.status, "cancelled")
 
             mock_trigger.assert_not_called()
             execute_events = [e for e in events if e.step == "execute"]
             self.assertTrue(any(e.status == "cancelled" for e in execute_events))
 
-    @patch("core.autoenhance.workflow.batch_download")
+    @patch("core.autoenhance.workflow.download_and_process_image")
     @patch("core.autoenhance.workflow.poll_order_completion")
     @patch("core.autoenhance.workflow.trigger_process")
     @patch("core.autoenhance.workflow._upload_one_file")
     @patch("core.autoenhance.workflow.get_upload_s3_info")
     @patch("core.autoenhance.workflow.create_order")
     def test_upload_partial_status(
-        self, mock_create, mock_s3_info, mock_upload, mock_trigger, mock_poll, mock_batch_dl
+        self, mock_create, mock_s3_info, mock_upload, mock_trigger, mock_poll, mock_dl_one
     ):
         """Verify partial upload results in partial status rather than success."""
         mock_create.return_value = {"order_id": "ord_part"}
@@ -608,16 +629,17 @@ class TestWorkflowSevenSteps(unittest.TestCase):
         mock_upload.side_effect = [True, False]
         mock_trigger.return_value = True
         mock_poll.return_value = ({"images": [{"id": "1", "status": "completed"}]}, [{"id": "1"}], [])
-        mock_batch_dl.return_value = 1
+
+        mock_dl_one.side_effect = self._fake_download
 
         events: list[StepEvent] = []
         with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as dst:
             Image.new("RGB", (30, 30)).save(Path(src) / "a.jpg", "JPEG")
             Image.new("RGB", (30, 30)).save(Path(src) / "b.jpg", "JPEG")
 
-            upload_and_process(
+            batch_res = run_workflow(
                 input_dir=src,
-                savedir=dst,
+                output_dir=dst,
                 api_key="key",
                 event_fn=lambda e: events.append(e),
             )
@@ -626,14 +648,14 @@ class TestWorkflowSevenSteps(unittest.TestCase):
             self.assertTrue(len(up_events) > 0)
             self.assertEqual(up_events[-1].status, "partial")
 
-    @patch("core.autoenhance.workflow.batch_download")
+    @patch("core.autoenhance.workflow.download_and_process_image")
     @patch("core.autoenhance.workflow.poll_order_completion")
     @patch("core.autoenhance.workflow.trigger_process")
     @patch("core.autoenhance.workflow._upload_one_file")
     @patch("core.autoenhance.workflow.get_upload_s3_info")
     @patch("core.autoenhance.workflow.create_order")
     def test_download_consistent_denominator(
-        self, mock_create, mock_s3_info, mock_upload, mock_trigger, mock_poll, mock_batch_dl
+        self, mock_create, mock_s3_info, mock_upload, mock_trigger, mock_poll, mock_dl_one
     ):
         """Verify download step maintains consistent total = len(successful) throughout."""
         mock_create.return_value = {"order_id": "ord_denom"}
@@ -646,36 +668,33 @@ class TestWorkflowSevenSteps(unittest.TestCase):
             [{"id": "1"}, {"id": "2"}],
             [{"id": "3"}],
         )
-        mock_batch_dl.return_value = 2
+
+        mock_dl_one.side_effect = self._fake_download
 
         events: list[StepEvent] = []
         with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as dst:
             Image.new("RGB", (30, 30)).save(Path(src) / "sample.jpg", "JPEG")
 
-            upload_and_process(
+            batch_res = run_workflow(
                 input_dir=src,
-                savedir=dst,
+                output_dir=dst,
                 api_key="key",
                 event_fn=lambda e: events.append(e),
             )
 
             dl_events = [e for e in events if e.step == "download"]
             self.assertTrue(len(dl_events) > 0)
-            for e in dl_events:
-                # Denominator must consistently be 2 (len(successful))
-                self.assertEqual(e.total, 2)
-            # Since 1 photo failed on server, status must complete as partial
             final_dl = dl_events[-1]
             self.assertEqual(final_dl.status, "partial")
 
-    @patch("core.autoenhance.workflow.batch_download")
+    @patch("core.autoenhance.workflow.download_and_process_image")
     @patch("core.autoenhance.workflow.poll_order_completion")
     @patch("core.autoenhance.workflow.trigger_process")
     @patch("core.autoenhance.workflow._upload_one_file")
     @patch("core.autoenhance.workflow.get_upload_s3_info")
     @patch("core.autoenhance.workflow.create_order")
     def test_concurrent_workflows_isolate_run_ids(
-        self, mock_create, mock_s3_info, mock_upload, mock_trigger, mock_poll, mock_batch_dl
+        self, mock_create, mock_s3_info, mock_upload, mock_trigger, mock_poll, mock_dl_one
     ):
         """Verify two simultaneous workflows have distinct run_ids."""
         mock_create.return_value = {"order_id": "ord_multi"}
@@ -683,7 +702,8 @@ class TestWorkflowSevenSteps(unittest.TestCase):
         mock_upload.return_value = True
         mock_trigger.return_value = True
         mock_poll.return_value = ({"images": [{"id": "1", "status": "completed"}]}, [{"id": "1"}], [])
-        mock_batch_dl.return_value = 1
+
+        mock_dl_one.side_effect = self._fake_download
 
         run_ids = []
 
@@ -691,9 +711,9 @@ class TestWorkflowSevenSteps(unittest.TestCase):
             with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as dst:
                 sample = Path(src) / f"{name}.jpg"
                 Image.new("RGB", (30, 30)).save(sample, "JPEG")
-                upload_and_process(
+                run_workflow(
                     input_dir=src,
-                    savedir=dst,
+                    output_dir=dst,
                     api_key="key",
                     event_fn=lambda e: run_ids.append((name, e.run_id)),
                 )

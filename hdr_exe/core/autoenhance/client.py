@@ -52,7 +52,10 @@ def _api_request(
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             last_err = e
             time.sleep(DEFAULT_RETRY_DELAY)
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            err_detail = resp.text if resp is not None and resp.text else ""
+            if err_detail:
+                raise RuntimeError(f"{e} - Details: {err_detail}") from e
             raise
 
     if last_err:

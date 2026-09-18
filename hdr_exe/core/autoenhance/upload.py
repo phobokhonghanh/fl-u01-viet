@@ -91,9 +91,10 @@ def prepare_upload_files(
                     log_fn(f"Chuyển đổi thành công {f.name} -> {conv_dst.name}", "success")
                 target_f = conv_dst
             else:
+                err_msg = f"Không thể đọc hoặc chuyển đổi ảnh đầu vào '{f.name}' sang định dạng JPG."
                 if log_fn:
-                    log_fn(f"Không thể chuyển đổi {f.name}, bỏ qua file này.", "error")
-                continue
+                    log_fn(err_msg, "error")
+                raise ValueError(err_msg)
 
         used_names.add(target_f.name)
         ready_files.append(target_f)

@@ -41,6 +41,8 @@ from core.autoenhance.metadata import (
 )
 from core.autoenhance.orders import (
     create_order,
+    filter_final_processed_images,
+    get_order_brackets,
     get_order_details,
     list_orders,
 )
@@ -60,7 +62,10 @@ from core.autoenhance.download import (
     download_selected_photos,
 )
 from core.autoenhance.workflow import (
-    upload_and_process,
+    autoenhance_executor,
+    build_autoenhance_outputs,
+    restart_workflow_job,
+    run_workflow,
 )
 from core.autoenhance.cdp import (
     extract_and_save_api_key,
@@ -93,6 +98,8 @@ __all__ = [
     "delete_order_metadata",
     # Orders
     "create_order",
+    "filter_final_processed_images",
+    "get_order_brackets",
     "list_orders",
     "get_order_details",
     # Upload & Execute
@@ -105,7 +112,10 @@ __all__ = [
     "batch_download",
     "download_selected_photos",
     # High-level Workflow
-    "upload_and_process",
+    "autoenhance_executor",
+    "build_autoenhance_outputs",
+    "run_workflow",
+    "restart_workflow_job",
     # CDP API Key Extraction
     "extract_api_key",
     "extract_and_save_api_key",

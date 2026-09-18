@@ -92,8 +92,8 @@ ENGINE_DIR: Path = get_engine_dir("autoenhance")
 STORAGE_FILE: Path = get_api_key_path("autoenhance")
 META_DIR: Path = get_metadata_dir("autoenhance")
 
-# Standard 7-step Autoenhance workflow definition
-WORKFLOW_STEPS: tuple[tuple[str, str], ...] = (
+# Standard Autoenhance job step definitions
+JOB_STEPS: tuple[tuple[str, str], ...] = (
     ("auth", "Xác thực API"),
     ("prepare", "Chuẩn bị & Chuyển đổi"),
     ("create_order", "Tạo đơn hàng"),
@@ -101,4 +101,7 @@ WORKFLOW_STEPS: tuple[tuple[str, str], ...] = (
     ("execute", "Kích hoạt xử lý"),
     ("polling", "Chờ xử lý hoàn tất"),
     ("download", "Tải ảnh kết quả"),
+    ("export", "Xuất file và manifest"),
 )
+
+WORKFLOW_STEPS: tuple[tuple[str, str], ...] = JOB_STEPS

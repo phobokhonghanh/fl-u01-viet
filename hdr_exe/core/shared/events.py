@@ -22,6 +22,7 @@ class StepEvent:
     message: str
     current: int | None = None
     total: int | None = None
+    job_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Chuyển đổi đối tượng StepEvent thành dictionary an toàn cho JSON."""
@@ -58,9 +59,11 @@ class StepTracker:
         run_id: str | None = None,
         event_fn: Callable[[StepEvent], None] | None = None,
         log_fn: Callable[[str, str], None] | None = None,
+        job_id: str | None = None,
     ) -> None:
         self.engine = engine
         self.run_id = run_id or uuid.uuid4().hex[:12]
+        self.job_id = job_id
         self._steps = list(steps)
         self._step_names = [s[0] for s in self._steps]
         self._step_titles = {s[0]: s[1] for s in self._steps}
@@ -116,6 +119,7 @@ class StepTracker:
             message=message,
             current=current,
             total=total,
+            job_id=self.job_id,
         )
         self._last_events[step_name] = event
 
@@ -138,6 +142,14 @@ class StepTracker:
                 self._log_fn_failed = True
 
         return event
+
+    def log(self, message: str, level: str = "info") -> None:
+        """Ghi log trực tiếp qua log_fn nếu có cấu hình."""
+        if self._log_fn and not self._log_fn_failed:
+            try:
+                self._log_fn(message, level)
+            except Exception:
+                self._log_fn_failed = True
 
     def start_step(
         self,

@@ -354,7 +354,7 @@ def download_single_enhance(
     # log(f"[DL-09] Đọc Firestore doc enhance={enhance_id}", "info")
     doc = firestore_get(f"{FLD_ENHANCES}/{enhance_id}", access_token)
     fields = doc.get("fields", {})
-    candidates = ("mergedImageUpsized", FLD_EDITED_UPSIZED, "mergedImage", FLD_EDITED, "outputImage")
+    candidates = (FLD_EDITED_UPSIZED, "mergedImageUpsized", FLD_EDITED, "mergedImage", "outputImage")
     gs_uri = ""
     for key in candidates:
         gs_uri = fields.get(key, {}).get(FLD_SV, "")
@@ -416,10 +416,10 @@ _RENDITION_CANONICAL: dict[str, str] = {
 }
 
 _DEFAULT_RENDITIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("edited", (FLD_EDITED,)),
     ("edited_upsized", (FLD_EDITED_UPSIZED,)),
-    ("merged", ("mergedImage",)),
     ("merged_upsized", ("mergedImageUpsized",)),
+    ("edited", (FLD_EDITED,)),
+    ("merged", ("mergedImage",)),
     ("output", ("outputImage",)),
 )
 
