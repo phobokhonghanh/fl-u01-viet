@@ -197,7 +197,85 @@ def test_verify_key_version_checking(monkeypatch):
     assert resp.status_code == 200
     data = resp.json()
     assert data["valid"] is False
-    assert "Phiên bản AutoHDR của bạn đã cũ" in data["message"]
+    # 3. Product autoenhance với version 0.9 -> Kiểm tra version và trả về 200 valid=False thông báo nâng cấp
+    resp = client.post("/api/key/active", json={
+        "key": "SOMEKEY",
+        "machine_id": "mach-1",
+        "product": "autoenhance",
+        "client_version": "0.9"
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["valid"] is False
+    assert "Phiên bản Autoenhance của bạn đã cũ" in data["message"]
+
+
+def test_autoenhance_key_verification_and_levels(monkeypatch):
+    records = [
+        KeyRecord.from_dict({"key": "AE_LITE", "name": "user_ae_lite", "product": "autoenhance", "level": "lite"}),
+        KeyRecord.from_dict({"key": "AE_PLUS", "name": "user_ae_plus", "product": "autoenhance", "level": "plus"}),
+    ]
+    _patch_storage(monkeypatch, records)
+
+    rec_lite = key_manager.verify_and_get_key("keys.json", "AE_LITE", "mach-ae-1", "autoenhance")
+    assert rec_lite is not None
+    assert rec_lite.level == "lite"
+    assert rec_lite.product == "autoenhance"
+    assert records[0].machine_id == "mach-ae-1"
+
+    # Máy khác không dùng được key đã khoá
+    rec_diff = key_manager.verify_and_get_key("keys.json", "AE_LITE", "mach-other", "autoenhance")
+    assert rec_diff is None
+
+    # Khác product không dùng được key
+    rec_wrong_prod = key_manager.verify_and_get_key("keys.json", "AE_PLUS", "mach-ae-2", "fotello")
+    assert rec_wrong_prod is None
+
+    rec_plus = key_manager.verify_and_get_key("keys.json", "AE_PLUS", "mach-ae-2", "autoenhance")
+    assert rec_plus is not None
+    assert rec_plus.level == "plus"
+
+
+def test_hdr_exe_client_versioning(monkeypatch):
+    """Kiểm tra client hdr_exe hoạt động với version 4.0 và tuân thủ min_client_version=2.0 chuẩn."""
+    from fastapi.testclient import TestClient
+    from app import app
+
+    records = [
+        KeyRecord.from_dict({"key": "HDR_EXE_KEY", "name": "user_hdr_exe", "product": "fotello", "level": "plus"}),
+    ]
+    _patch_storage(monkeypatch, records)
+    client = TestClient(app)
+
+    # 1. Client hdr_exe với version 4.0 hợp lệ do > min_client_version=2.0
+    resp_hdr_ok = client.post("/api/key/active", json={
+        "key": "HDR_EXE_KEY",
+        "machine_id": "mach-hdr-1",
+        "product": "fotello",
+        "client_version": "4.0",
+        "client_name": "hdr_exe",
+    })
+    assert resp_hdr_ok.status_code == 200
+    data_hdr_ok = resp_hdr_ok.json()
+    assert data_hdr_ok["valid"] is True
+    assert data_hdr_ok["status"].lower() == "ok"
+    assert data_hdr_ok["level"] == "plus"
+
+    # 2. Client với version 1.0 bị từ chối do < min_client_version=2.0
+    resp_old = client.post("/api/key/active", json={
+        "key": "HDR_EXE_KEY",
+        "machine_id": "mach-hdr-1",
+        "product": "fotello",
+        "client_version": "1.0",
+        "client_name": "hdr_exe",
+    })
+    assert resp_old.status_code == 200
+    data_old = resp_old.json()
+    assert data_old["valid"] is False
+    assert data_old["status"] == "error"
+    assert "2.0" in data_old["message"]
+
+
 
 
 

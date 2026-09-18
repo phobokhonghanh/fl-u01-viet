@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 DEFAULT_KEY_PRODUCT = "autohdr"
-VALID_KEY_PRODUCTS = {"autohdr", "fotello"}
+VALID_KEY_PRODUCTS = {"autohdr", "fotello", "autoenhance"}
 
 VALID_KEY_LEVELS = ["lite", "plus"]
 DEFAULT_KEY_LEVEL = "lite"
