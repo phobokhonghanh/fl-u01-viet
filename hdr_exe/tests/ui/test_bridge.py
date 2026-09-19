@@ -275,18 +275,26 @@ def test_outputs_formatting_with_partial_and_merged_outputs(bridge, tmp_path):
     assert all(o["status"] == "success" for o in job["outputs"])
 
 
-def test_task_control(bridge):
+def test_task_control(bridge, tmp_path):
     assert bridge.is_task_running("autoenhance") is False
     stop_res = bridge.stop_engine_task("autoenhance")
     assert stop_res["success"] is False  # No task running to stop
 
     # Attempt to start task without license entitlement should fail cleanly
-    with patch("ui.bridge.require_access") as mock_req:
+    with patch("ui.bridge.require_access") as mock_req, patch.object(bridge, "inspect_input_folder", return_value={"valid": True, "inputs": 1, "outputs": 1}):
         from core.shared.licensing.models import LicensingAccessError
         mock_req.side_effect = LicensingAccessError("No valid key", code="UNREGISTERED")
-        res = bridge.start_engine_task("autoenhance", {"input_dir": "/dummy", "output_dir": "/dummy", "exec_mode": "single"})
+        res = bridge.start_engine_task("autoenhance", {"input_dir": str(tmp_path), "output_dir": str(tmp_path), "exec_mode": "single"})
         assert res["success"] is False
         assert "No valid key" in res["message"]
+
+
+def test_start_engine_task_empty_folder_validation(bridge, tmp_path):
+    empty_dir = tmp_path / "empty_dir"
+    empty_dir.mkdir()
+    res = bridge.start_engine_task("autoenhance", {"input_dir": str(empty_dir), "output_dir": str(tmp_path), "exec_mode": "single"})
+    assert res["success"] is False
+    assert "Không tìm thấy ảnh hợp lệ" in res["message"]
 
 
 def test_create_app_factory():

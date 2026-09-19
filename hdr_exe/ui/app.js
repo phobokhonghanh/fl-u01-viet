@@ -308,6 +308,17 @@ function openActiveJobFolder(engine) {
   }
 }
 
+function openJobFolder(engine, jobId) {
+  const state = appState[engine];
+  const job = state.jobs.find(j => j.jobId === jobId);
+  const targetDir = job?.output_dir || state.outputDir;
+  if (targetDir) {
+    callPy('open_folder', targetDir);
+  } else {
+    showToast('Chưa có thư mục đầu ra cho job này.', 'warning');
+  }
+}
+
 // Live Preflight Estimation
 function updateEstimation(engine) {
   const state = appState[engine];
@@ -611,7 +622,7 @@ function renderJobsTable(engine) {
       actionBtn = `<button class="btn btn-secondary btn-sm" onclick="restartJobDirect('${engine}', '${job.jobId}')" title="Khởi động lại job này">🔄 Restart</button>`;
     } else if (job.status === 'success' || job.status === 'partial') {
       actionBtn = `
-        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); callPy('open_folder', '${escapeHtml(job.output_dir || state.outputDir)}')" title="Mở thư mục">📂 Thư mục</button>
+        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openJobFolder('${engine}', '${job.jobId}')" title="Mở thư mục">📂 Thư mục</button>
         <button class="btn btn-secondary btn-sm" onclick="selectJob('${engine}', '${job.jobId}')">👁️ Xem</button>
       `;
     } else {
