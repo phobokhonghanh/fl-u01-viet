@@ -45,6 +45,11 @@ jobs:
           pip install pyinstaller
           pip install -r hdr_exe/requirements.txt
 
+      - name: Kiểm tra import (Smoke Test)
+        working-directory: ./hdr_exe
+        run: |
+          python main.py --smoke-test
+
       - name: Đóng gói Windows (.exe)
         if: runner.os == 'Windows'
         shell: pwsh

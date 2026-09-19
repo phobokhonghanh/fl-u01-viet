@@ -28,7 +28,17 @@ def main() -> None:
         action="store_true",
         help="Khởi chạy với Web Inspector và debug logging",
     )
+    parser.add_argument(
+        "--smoke-test",
+        action="store_true",
+        help="Kiểm tra import và khởi tạo module mà không khởi chạy GUI",
+    )
     args = parser.parse_args()
+
+    if args.smoke_test:
+        print("HDR Client smoke test OK")
+        sys.exit(0)
+
     run_desktop(debug=args.debug)
 
 
