@@ -1,5 +1,6 @@
 [project]
-name = "backend-worker"
+name = "u01-viet-backend"
+
 version = "0.1.0"
 description = "Cloudflare Python Worker for Key & Payment Service"
 requires-python = ">=3.12"
