@@ -5,13 +5,16 @@ compatibility_date = "2024-04-03"
 compatibility_flags = ["python_workers"]
 
 [vars]
-PASS_ADMIN = "admin"
-SEPAY_ENV = "sandbox"
-FRONTEND_BASE_URL = "http://localhost:3000"
+FRONTEND_BASE_URL = "https://u01-viet.vercel.app/"
+KEYS_FILENAME = "viet_keys.json"
+SEPAY_ENV = "production"
 PRICE_LITE = "400.000 VNĐ / tháng"
 PRICE_PLUS = "700.000 VNĐ / tháng"
 MIN_CLIENT_VERSION = "2.0"
-KEYS_FILENAME = "keys.json"
+RETRY_MAX_ATTEMPTS = "10"
+RETRY_INITIAL_DELAY = "15.0"
+RETRY_BACKOFF_FACTOR = "1.5"
+
 
 # Cloudflare D1 Database binding
 [[d1_databases]]
