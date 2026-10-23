@@ -1,0 +1,25 @@
+name = "backend-worker"
+main = "app.py"
+compatibility_date = "2024-04-03"
+compatibility_flags = ["python_workers"]
+
+[vars]
+SEPAY_ENV = "sandbox"
+FRONTEND_BASE_URL = "http://localhost:3000"
+PRICE_LITE = "400.000 VNĐ / tháng"
+PRICE_PLUS = "700.000 VNĐ / tháng"
+MIN_CLIENT_VERSION = "2.0"
+KEYS_FILENAME = "keys.json"
+
+# Cloudflare D1 Database binding
+# Chạy 'npx wrangler d1 create fl-u01-db' và thay database_id vào đây
+[[d1_databases]]
+binding = "DB"
+database_name = "fl-u01-db"
+database_id = "your-d1-database-id-here"
+
+# Cloudflare KV Namespace binding để lưu trữ keys
+# Chạy 'npx wrangler kv:namespace create KEYS_KV' và thay id vào đây
+[[kv_namespaces]]
+binding = "KEYS_KV"
+id = "your-kv-namespace-id-here"

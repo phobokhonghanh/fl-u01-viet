@@ -1,5 +1,6 @@
 """
 Keys Router - API endpoints quản lý License Key.
+Tương thích với Cloudflare Workers (Cloudflare KV + local fallback).
 """
 
 import json
@@ -7,17 +8,24 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Response, BackgroundTasks
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Response, BackgroundTasks, Request
 from pydantic import BaseModel
 
 from config.settings import Settings
 from core import key_manager
+from core.env_context import get_current_env
 from core.telegram import send_telegram_notification
 from models.schemas import DEFAULT_KEY_PRODUCT, is_valid_key_product, normalize_key_product
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["keys"])
+
+
+def _get_request_env(request: Optional[Request] = None):
+    if request is not None and hasattr(request.state, "env") and request.state.env is not None:
+        return request.state.env
+    return get_current_env()
 
 
 class KeyRequest(BaseModel):
@@ -70,13 +78,14 @@ def parse_version(v_str: Optional[str]) -> tuple[int, ...]:
 
 
 @router.post("/key/active")
-async def verify_key(req: KeyRequest):
+async def verify_key(req: KeyRequest, request: Request):
     """Verify if a key is active and matches machine_id (locking)."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     product = normalize_key_product(req.product)
     if not is_valid_key_product(product):
         raise HTTPException(status_code=400, detail="Invalid product")
-        
+
     min_ver = parse_version(settings.min_client_version)
     client_ver = parse_version(req.client_version)
     if client_ver < min_ver:
@@ -87,8 +96,7 @@ async def verify_key(req: KeyRequest):
             "message": f"Phiên bản {prod_name} của bạn đã cũ. Vui lòng tải phiên bản mới nhất {settings.min_client_version} để tiếp tục sử dụng."
         }
 
-
-    record = key_manager.verify_and_get_key(settings.keys_filename, req.key, req.machine_id, product)
+    record = await key_manager.async_verify_and_get_key(settings.keys_filename, req.key, req.machine_id, product, env=env)
     if not record:
         raise HTTPException(status_code=403, detail="Key is invalid, expired, used on another machine, or not allowed for this product")
     return {
@@ -103,18 +111,20 @@ async def verify_key(req: KeyRequest):
 
 
 @router.post("/admin/keys/list")
-async def admin_list_keys(req: AdminKeyListRequest):
+async def admin_list_keys(req: AdminKeyListRequest, request: Request):
     """List all keys (Admin only)."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(req.password, settings)
-    keys = key_manager.load_keys(settings.keys_filename)
+    keys = await key_manager.async_load_keys(settings.keys_filename, env=env)
     return [k.to_dict() for k in keys]
 
 
 @router.post("/admin/keys/add")
-async def admin_add_key(req: AdminKeyAddRequest, background_tasks: BackgroundTasks):
+async def admin_add_key(req: AdminKeyAddRequest, background_tasks: BackgroundTasks, request: Request):
     """Add or update a key (Admin only)."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(req.password, settings)
 
     expiry = None
@@ -126,9 +136,10 @@ async def admin_add_key(req: AdminKeyAddRequest, background_tasks: BackgroundTas
     if not is_valid_key_product(product):
         raise HTTPException(status_code=400, detail="Invalid product")
 
-    record, status, changes = key_manager.add_or_update_key_by_name(settings.keys_filename, req.name, expiry, product, req.level)
+    record, status, changes = await key_manager.async_add_or_update_key_by_name(
+        settings.keys_filename, req.name, expiry, product, req.level, env=env
+    )
 
-    # Notify telegram in the background
     action_str = "CREATED" if status == "new" else ("UPDATED" if status == "updated" else "EXISTS")
     status_emoji = "🔑" if status == "new" else ("🔄" if status == "updated" else "ℹ️")
 
@@ -163,20 +174,20 @@ async def admin_add_key(req: AdminKeyAddRequest, background_tasks: BackgroundTas
 
 
 @router.post("/admin/keys/delete")
-async def admin_delete_key(req: AdminKeyDeleteRequest, background_tasks: BackgroundTasks):
+async def admin_delete_key(req: AdminKeyDeleteRequest, background_tasks: BackgroundTasks, request: Request):
     """Delete a key (Admin only)."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(req.password, settings)
 
-    # Load keys to find the one we are about to delete for the telegram notification
-    keys = key_manager.load_keys(settings.keys_filename)
+    keys = await key_manager.async_load_keys(settings.keys_filename, env=env)
     deleted_record = None
     for k in keys:
         if k.key == req.key or k.name == req.key:
             deleted_record = k
             break
 
-    success = key_manager.delete_key(settings.keys_filename, req.key)
+    success = await key_manager.async_delete_key(settings.keys_filename, req.key, env=env)
     if success:
         if deleted_record:
             msg = (
@@ -197,16 +208,16 @@ async def admin_delete_key(req: AdminKeyDeleteRequest, background_tasks: Backgro
 
 
 @router.post("/admin/keys/reset")
-async def admin_reset_key(req: AdminKeyResetRequest, background_tasks: BackgroundTasks):
+async def admin_reset_key(req: AdminKeyResetRequest, background_tasks: BackgroundTasks, request: Request):
     """Reset the machine_id of a key (Admin only)."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(req.password, settings)
 
-    record = key_manager.reset_key_machine(settings.keys_filename, req.key)
+    record = await key_manager.async_reset_key_machine(settings.keys_filename, req.key, env=env)
     if not record:
         raise HTTPException(status_code=404, detail="Key not found")
 
-    # Notify telegram in the background
     msg = (
         f"🔄 <b>License Key RESET</b>\n"
         f"• <b>Name</b>: <code>{record.name}</code>\n"
@@ -220,13 +231,13 @@ async def admin_reset_key(req: AdminKeyResetRequest, background_tasks: Backgroun
 
 
 @router.post("/admin/keys/reset-all")
-async def admin_reset_all_keys(req: AdminKeyExportRequest, background_tasks: BackgroundTasks):
-
+async def admin_reset_all_keys(req: AdminKeyExportRequest, background_tasks: BackgroundTasks, request: Request):
     """Reset machine_id of ALL active keys (Admin only)."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(req.password, settings)
 
-    count = key_manager.reset_all_keys_machine(settings.keys_filename)
+    count = await key_manager.async_reset_all_keys_machine(settings.keys_filename, env=env)
 
     msg = (
         f"🔄 <b>ALL License Keys RESET</b>\n"
@@ -237,11 +248,11 @@ async def admin_reset_all_keys(req: AdminKeyExportRequest, background_tasks: Bac
     return {"status": "ok", "message": f"Successfully reset machine_id for {count} keys", "count": count}
 
 
-
 @router.post("/admin/keys/import")
-async def admin_import_keys(password: str = Form(...), file: UploadFile = File(...)):
+async def admin_import_keys(request: Request, password: str = Form(...), file: UploadFile = File(...)):
     """Import keys from JSON file (Admin only)."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(password, settings)
 
     try:
@@ -249,7 +260,7 @@ async def admin_import_keys(password: str = Form(...), file: UploadFile = File(.
         data = json.loads(content.decode("utf-8"))
         if not isinstance(data, list):
             raise HTTPException(status_code=400, detail="Invalid JSON format: Expected a list of key records")
-        imported = key_manager.import_keys(settings.keys_filename, data)
+        imported = await key_manager.async_import_keys(settings.keys_filename, data, env=env)
         return {"status": "ok", "message": f"Successfully imported {imported} new keys"}
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
@@ -260,14 +271,15 @@ async def admin_import_keys(password: str = Form(...), file: UploadFile = File(.
 
 
 @router.post("/admin/keys/export")
-async def admin_export_keys(req: AdminKeyExportRequest):
+async def admin_export_keys(req: AdminKeyExportRequest, request: Request):
     """Export keys as JSON file (Admin only)."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(req.password, settings)
 
-    keys = key_manager.load_keys(settings.keys_filename)
+    keys = await key_manager.async_load_keys(settings.keys_filename, env=env)
     if not keys:
-        raise HTTPException(status_code=404, detail="Keys data not found on S3")
+        raise HTTPException(status_code=404, detail="Keys data not found")
     content = json.dumps([key.to_dict() for key in keys], ensure_ascii=False, indent=2)
 
     return Response(

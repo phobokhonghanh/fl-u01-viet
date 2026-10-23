@@ -1,5 +1,6 @@
 """
 Payment Router - API endpoints cho hệ thống thanh toán SePay.
+Tương thích với Cloudflare Workers (D1 SQLite, serverless stateless SSE).
 """
 
 import asyncio
@@ -13,11 +14,17 @@ from sse_starlette.sse import EventSourceResponse
 
 from config.settings import Settings
 from core import payment_manager
-from core.sse_manager import sse_manager
+from core.env_context import get_current_env
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/payment", tags=["payment"])
+
+
+def _get_request_env(request: Optional[Request] = None):
+    if request is not None and hasattr(request.state, "env") and request.state.env is not None:
+        return request.state.env
+    return get_current_env()
 
 
 def _check_admin(password: str, settings: Settings):
@@ -37,8 +44,9 @@ def _serialize_order(order: dict) -> dict:
 
 def _serialize_transaction(tx: dict) -> dict:
     result = dict(tx)
-    if result.get("created_at") and hasattr(result["created_at"], "isoformat"):
-        result["created_at"] = result["created_at"].isoformat()
+    for key in ("created_at",):
+        if result.get(key) and hasattr(result[key], "isoformat"):
+            result[key] = result[key].isoformat()
     return result
 
 
@@ -76,78 +84,81 @@ class AdminTransactionsRequest(BaseModel):
 # --- Admin Endpoints ---
 
 @router.post("/admin/orders/list")
-async def admin_list_orders(req: AdminListOrdersRequest):
+async def admin_list_orders(req: AdminListOrdersRequest, request: Request):
     """Admin: Lấy danh sách toàn bộ đơn hàng."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(req.password, settings)
-    orders = payment_manager.list_orders(settings)
+    orders = await payment_manager.list_orders(settings, env=env)
     return [_serialize_order(o) for o in orders]
 
 
 @router.post("/admin/orders/create")
-async def admin_create_order(req: CreateOrderRequest):
+async def admin_create_order(req: CreateOrderRequest, request: Request):
     """Admin: Tạo đơn hàng mới."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(req.password, settings)
-    order = payment_manager.create_order(settings, req.user_name, req.amount, req.item, req.note)
+    order = await payment_manager.create_order(settings, req.user_name, req.amount, req.item, req.note, env=env)
     return _serialize_order(order)
 
 
 @router.post("/admin/orders/update/{order_id}")
-async def admin_update_order(order_id: str, req: UpdateOrderRequest):
+async def admin_update_order(order_id: str, req: UpdateOrderRequest, request: Request):
     """Admin: Cập nhật thông tin đơn hàng."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(req.password, settings)
 
     valid_statuses = {"PENDING", "PAID", "PARTIALLY_PAID", "EXPIRED"}
     if req.status and req.status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
 
-    updated = payment_manager.update_order(
+    updated = await payment_manager.update_order(
         settings, order_id,
         user_name=req.user_name, amount=req.amount,
         item=req.item, note=req.note, status=req.status,
+        env=env
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Order not found")
-
-    # Thông báo SSE cho khách đang theo dõi nếu status thay đổi
-    if req.status:
-        await sse_manager.notify(order_id, {"status": req.status})
 
     return _serialize_order(updated)
 
 
 @router.post("/admin/orders/delete/{order_id}")
-async def admin_delete_order(order_id: str, req: DeleteOrderRequest):
+async def admin_delete_order(order_id: str, req: DeleteOrderRequest, request: Request):
     """Admin: Xóa đơn hàng."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(req.password, settings)
-    if not payment_manager.delete_order(settings, order_id):
+    if not await payment_manager.delete_order(settings, order_id, env=env):
         raise HTTPException(status_code=404, detail="Order not found")
     return {"status": "ok", "message": "Order deleted successfully"}
 
 
 @router.post("/admin/orders/{order_id}/transactions")
-async def admin_get_transactions(order_id: str, req: AdminTransactionsRequest):
+async def admin_get_transactions(order_id: str, req: AdminTransactionsRequest, request: Request):
     """Admin: Xem lịch sử giao dịch của một đơn hàng."""
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
     _check_admin(req.password, settings)
 
-    if not payment_manager.get_order_by_id(settings, order_id):
+    if not await payment_manager.get_order_by_id(settings, order_id, env=env):
         raise HTTPException(status_code=404, detail="Order not found")
 
-    txs = payment_manager.get_transactions(settings, order_id)
+    txs = await payment_manager.get_transactions(settings, order_id, env=env)
     return [_serialize_transaction(tx) for tx in txs]
 
 
 # --- Customer Endpoints ---
 
 @router.get("/order/{order_id}")
-async def customer_get_order(order_id: str, token: str):
+async def customer_get_order(order_id: str, token: str, request: Request):
     """Khách hàng: Xem thông tin đơn hàng bằng ID + access_token."""
-    settings = Settings.from_env()
-    order = payment_manager.get_order_for_customer(settings, order_id, token)
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
+    order = await payment_manager.get_order_for_customer(settings, order_id, token, env=env)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found or invalid token")
 
@@ -162,55 +173,55 @@ async def customer_get_order(order_id: str, token: str):
 async def order_sse_events(order_id: str, token: str, request: Request):
     """
     SSE: Khách hàng đăng ký nhận sự kiện thời gian thực cho đơn hàng.
-    Khi thanh toán thành công, server sẽ đẩy event xuống ngay lập tức.
+    Định kỳ poll D1 mỗi 2.5s để stream event cập nhật mà không cần Durable Objects.
     """
-    settings = Settings.from_env()
-    order = payment_manager.get_order_for_customer(settings, order_id, token)
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
+    order = await payment_manager.get_order_for_customer(settings, order_id, token, env=env)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found or invalid token")
 
     async def event_generator():
-        # Gửi trạng thái hiện tại ngay khi kết nối
-        yield {"data": json.dumps({"status": order["status"]})}
+        # Gửi trạng thái ban đầu
+        current_status = order["status"]
+        yield {"data": json.dumps({"status": current_status})}
 
-        # Nếu đã PAID rồi thì không cần giữ kết nối nữa
-        if order["status"] == "PAID":
+        if current_status == "PAID":
             return
 
-        q = sse_manager.subscribe(order_id)
-        try:
-            while True:
-                # Kiểm tra client đã ngắt kết nối chưa
-                if await request.is_disconnected():
+        last_status = current_status
+        # Giữ kết nối tối đa 60 vòng x 2.5s ~ 2.5 phút trước khi client tự reconnect
+        for _ in range(60):
+            if await request.is_disconnected():
+                break
+
+            await asyncio.sleep(2.5)
+
+            # Lấy trạng thái mới nhất từ D1
+            latest_order = await payment_manager.get_order_for_customer(settings, order_id, token, env=env)
+            if not latest_order:
+                break
+
+            status_now = latest_order["status"]
+            if status_now != last_status:
+                last_status = status_now
+                yield {"data": json.dumps({"status": status_now})}
+                if status_now == "PAID":
                     break
-                try:
-                    data = await asyncio.wait_for(q.get(), timeout=25)
-                    yield {"data": json.dumps(data)}
-                    # Nếu đã thanh toán đủ thì đóng stream
-                    if data.get("status") == "PAID":
-                        break
-                except asyncio.TimeoutError:
-                    # Gửi heartbeat để giữ kết nối
-                    yield {"comment": "ping"}
-        finally:
-            sse_manager.unsubscribe(order_id, q)
+            else:
+                # Heartbeat ping để giữ kết nối qua edge proxy
+                yield {"comment": "ping"}
 
     return EventSourceResponse(event_generator())
 
 
-# --- SePay Legacy Webhook (giữ lại để tương thích) ---
+# --- SePay Legacy Webhook ---
 
 @router.post("/webhook/sepay")
 async def sepay_webhook(request: Request):
     """Nhận webhook từ SePay khi có giao dịch."""
-    settings = Settings.from_env()
-
-    # Kiểm tra secret nếu được cấu hình
-    if settings.sepay_webhook_secret:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header != f"Apikey {settings.sepay_webhook_secret}":
-            logger.warning("Webhook SePay bị từ chối: Sai Authorization header.")
-            raise HTTPException(status_code=401, detail="Unauthorized webhook")
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
 
     try:
         data = await request.json()
@@ -218,31 +229,21 @@ async def sepay_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     logger.info(f"Webhook SePay nhận được: {data}")
-    result = payment_manager.process_webhook(settings, data)
-
-    if result:
-        order_id, new_status = result
-        await sse_manager.notify(order_id, {"status": new_status})
-
+    await payment_manager.process_webhook(settings, data, env=env)
     return {"status": "ok"}
 
 
 # --- SePay Payment Gateway Checkout ---
 
 @router.get("/order/{order_id}/checkout")
-async def get_checkout_fields(order_id: str, token: str):
+async def get_checkout_fields(order_id: str, token: str, request: Request):
     """
     Trả về form fields + checkout URL để frontend tự động submit sang SePay.
     Bao gồm chữ ký HMAC-SHA256.
-
-    Bad cases:
-    - order không tồn tại / token sai: 404
-    - đơn đã PAID: 400 (không cho checkout lại)
-    - SEPAY_MERCHANT_ID/SECRET_KEY chưa cấu hình: 503
-    - DB lỗi tạm thời: 503
     """
-    settings = Settings.from_env()
-    order = payment_manager.get_order_for_customer(settings, order_id, token)
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
+    order = await payment_manager.get_order_for_customer(settings, order_id, token, env=env)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found or invalid token")
 
@@ -253,7 +254,7 @@ async def get_checkout_fields(order_id: str, token: str):
         raise HTTPException(status_code=400, detail="Order has expired")
 
     try:
-        fields = payment_manager.build_checkout_fields(settings, order)
+        fields = await payment_manager.build_checkout_fields(settings, order, env=env)
         checkout_url = payment_manager.get_checkout_url(settings)
     except ValueError as e:
         logger.error(f"Lỗi cấu hình SePay PG: {e}")
@@ -271,53 +272,34 @@ async def get_checkout_fields(order_id: str, token: str):
 async def sepay_ipn(
     request: Request,
     x_secret_key: Optional[str] = Header(None, alias="X-Secret-Key"),
-    authorization: Optional[str] = Header(None)
 ):
     """
     Nhận IPN từ SePay Payment Gateway sau khi giao dịch hoàn thành.
     Endpoint này phải được đăng ký trong SePay Dashboard.
-
-    Retry logic:
-    - Trả 200: IPN đã xử lý xong (kể cả bỏ qua hợp lệ)
-    - Trả 500: DB lỗi tạm thời → SePay sẽ tự retry IPN
-    - Trả 400: dữ liệu không hợp lệ → SePay không retry (lỗi của client)
     """
-    settings = Settings.from_env()
+    env = _get_request_env(request)
+    settings = Settings.from_env(env)
 
-    # Xác thực IPN bằng X-Secret-Key header (theo tài liệu SePay Payment Gateway IPN)
-    # Lấy secret key từ SePay Dashboard → Cổng thanh toán → Cấu hình → IPN
-    # Biến môi trường: SEPAY_IPN_SECRET_KEY
     ipn_secret = settings.sepay_ipn_secret_key
-
     if ipn_secret:
-        # Kiểm tra header X-Secret-Key gửi từ SePay
         if x_secret_key != ipn_secret:
-            logger.warning(f"IPN: Xác thực thất bại. X-Secret-Key không khớp.")
+            logger.warning("IPN: Xác thực thất bại. X-Secret-Key không khớp.")
             raise HTTPException(status_code=401, detail="Unauthorized: Invalid IPN Secret Key")
     else:
-        # Chưa cấu hình IPN secret → bỏ qua xác thực (dùng khi test sandbox)
         logger.warning("IPN: SEPAY_IPN_SECRET_KEY chưa được cấu hình, bỏ qua xác thực (chỉ nên dùng khi test).")
 
     try:
         data = await request.json()
     except Exception:
-        # Dữ liệu không parse được — không cần SePay retry
         logger.error("IPN: Không thể parse JSON payload.")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     logger.info(f"IPN SePay PG nhận được: {data}")
 
     try:
-        result = payment_manager.process_ipn(settings, data)
+        await payment_manager.process_ipn(settings, data, env=env)
     except Exception as e:
-        # DB lỗi tạm thời — trả 500 để SePay retry sau
         logger.error(f"IPN xử lý thất bại (sẽ được retry): {e}")
         raise HTTPException(status_code=500, detail="Internal error, please retry")
 
-    # Notify SSE nếu status thay đổi
-    if result:
-        order_id, new_status = result
-        await sse_manager.notify(order_id, {"status": new_status})
-
-    # Luôn trả 200 với các trường hợp bình thường (bỏ qua / đã xử lý)
     return {"success": True}

@@ -1,7 +1,11 @@
 import os
 from dataclasses import dataclass
-from typing import Optional
-from dotenv import load_dotenv
+from typing import Optional, Any
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*args, **kwargs):
+        pass
 
 @dataclass
 class Settings:
@@ -11,24 +15,13 @@ class Settings:
     retry_initial_delay: float = 15.0
     retry_backoff_factor: float = 1.5
 
-    # S3 Settings
-    s3_region: Optional[str] = None
-    s3_endpoint: Optional[str] = None
-    s3_access_key: Optional[str] = None
-    s3_secret_key: Optional[str] = None
-    s3_bucket: Optional[str] = None
-
-    # Payment - Database
+    # Cloudflare KV & D1 Settings
     database_url: Optional[str] = None
 
     # Payment - SePay Payment Gateway
     sepay_merchant_id: Optional[str] = None
     sepay_secret_key: Optional[str] = None
     sepay_env: str = "sandbox"              # "sandbox" | "production"
-
-    # Payment - IPN (Instant Payment Notification)
-    # Secret key riêng để xác thực callback từ SePay → backend (Header X-Secret-Key)
-    # Lấy từ SePay Dashboard → Cổng thanh toán → Cấu hình → IPN
     sepay_ipn_secret_key: Optional[str] = None
 
     # URL frontend để build success/error/cancel callback URL
@@ -47,34 +40,49 @@ class Settings:
     min_client_version: str = "2.0"
 
     @classmethod
-    def from_env(cls, env_path: Optional[str] = None) -> "Settings":
+    def from_env(cls, env_obj: Optional[Any] = None, env_path: Optional[str] = None) -> "Settings":
         load_dotenv(dotenv_path=env_path)
 
-        def get_env(key: str, default: Optional[str] = None) -> Optional[str]:
-            val = os.getenv(key, default)
-            return val.strip() if val else val
+        def get_val(key: str, default: Optional[str] = None) -> Optional[str]:
+            val = None
+            if env_obj is not None:
+                if isinstance(env_obj, dict):
+                    val = env_obj.get(key)
+                else:
+                    val = getattr(env_obj, key, None)
+                    if val is None and hasattr(env_obj, "get"):
+                        try:
+                            val = env_obj.get(key)
+                        except Exception:
+                            pass
+            if val is None:
+                val = os.getenv(key, default)
+            return str(val).strip() if val is not None else default
+
+        thread_id_val = get_val("TELEGRAM_THREAD_ID")
+        telegram_thread_id = None
+        if thread_id_val:
+            try:
+                telegram_thread_id = int(thread_id_val)
+            except ValueError:
+                pass
 
         return cls(
-            pass_admin=get_env("PASS_ADMIN", "admin"),
-            keys_filename=get_env("KEYS_FILENAME", "keys.json"),
-            retry_max_attempts=int(get_env("RETRY_MAX_ATTEMPTS", "10")),
-            retry_initial_delay=float(get_env("RETRY_INITIAL_DELAY", "15.0")),
-            retry_backoff_factor=float(get_env("RETRY_BACKOFF_FACTOR", "1.5")),
-            s3_region=get_env("S3_REGION"),
-            s3_endpoint=get_env("S3_ENDPOINT"),
-            s3_access_key=get_env("S3_ACCESS_KEY"),
-            s3_secret_key=get_env("S3_SECRET_KEY"),
-            s3_bucket=get_env("S3_BUCKET_NAME"),
-            database_url=get_env("DATABASE_URL"),
-            sepay_merchant_id=get_env("SEPAY_MERCHANT_ID"),
-            sepay_secret_key=get_env("SEPAY_SECRET_KEY"),
-            sepay_env=get_env("SEPAY_ENV", "sandbox"),
-            sepay_ipn_secret_key=get_env("SEPAY_IPN_SECRET_KEY"),
-            frontend_base_url=get_env("FRONTEND_BASE_URL", "http://localhost:3000"),
-            telegram_bot_token=get_env("TELEGRAM_BOT_TOKEN"),
-            telegram_chat_id=get_env("TELEGRAM_CHAT_ID"),
-            telegram_thread_id=int(get_env("TELEGRAM_THREAD_ID")) if get_env("TELEGRAM_THREAD_ID") else None,
-            price_lite=get_env("PRICE_LITE") or cls.price_lite,
-            price_plus=get_env("PRICE_PLUS") or cls.price_plus,
-            min_client_version=get_env("MIN_CLIENT_VERSION") or cls.min_client_version,
+            pass_admin=get_val("PASS_ADMIN", "admin"),
+            keys_filename=get_val("KEYS_FILENAME", "keys.json"),
+            retry_max_attempts=int(get_val("RETRY_MAX_ATTEMPTS", "10")),
+            retry_initial_delay=float(get_val("RETRY_INITIAL_DELAY", "15.0")),
+            retry_backoff_factor=float(get_val("RETRY_BACKOFF_FACTOR", "1.5")),
+            database_url=get_val("DATABASE_URL"),
+            sepay_merchant_id=get_val("SEPAY_MERCHANT_ID"),
+            sepay_secret_key=get_val("SEPAY_SECRET_KEY"),
+            sepay_env=get_val("SEPAY_ENV", "sandbox"),
+            sepay_ipn_secret_key=get_val("SEPAY_IPN_SECRET_KEY"),
+            frontend_base_url=get_val("FRONTEND_BASE_URL", "http://localhost:3000"),
+            telegram_bot_token=get_val("TELEGRAM_BOT_TOKEN"),
+            telegram_chat_id=get_val("TELEGRAM_CHAT_ID"),
+            telegram_thread_id=telegram_thread_id,
+            price_lite=get_val("PRICE_LITE") or cls.price_lite,
+            price_plus=get_val("PRICE_PLUS") or cls.price_plus,
+            min_client_version=get_val("MIN_CLIENT_VERSION") or cls.min_client_version,
         )

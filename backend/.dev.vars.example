@@ -1,0 +1,16 @@
+# Cấu hình biến bí mật (Secrets) cho môi trường local development với Cloudflare Workers
+# Đổi tên file này thành .dev.vars và điền thông tin thật của bạn
+# Khi deploy lên Cloudflare, dùng lệnh: npx wrangler secret put <TÊN_BIẾN>
+
+# Password cho Admin actions
+PASS_ADMIN=admin
+
+# SePay Payment Gateway Configuration
+SEPAY_MERCHANT_ID=your_merchant_id
+SEPAY_SECRET_KEY=your_secret_key
+SEPAY_IPN_SECRET_KEY=your_ipn_secret_key
+
+# Telegram Notification Configuration
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+TELEGRAM_THREAD_ID=
