@@ -10,7 +10,6 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request, Header
 from pydantic import BaseModel
-from sse_starlette.sse import EventSourceResponse
 
 from config.settings import Settings
 from core import payment_manager
@@ -212,6 +211,7 @@ async def order_sse_events(order_id: str, token: str, request: Request):
                 # Heartbeat ping để giữ kết nối qua edge proxy
                 yield {"comment": "ping"}
 
+    from sse_starlette.sse import EventSourceResponse
     return EventSourceResponse(event_generator())
 
 

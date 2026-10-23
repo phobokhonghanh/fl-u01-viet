@@ -1,20 +1,16 @@
-"""
-Telegram notification helper utility.
-"""
-
+import json
 import logging
-import httpx
 from config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
 
-async def send_telegram_notification(text: str) -> bool:
+async def send_telegram_notification(text: str, env=None) -> bool:
     """
     Sends a message to the configured Telegram chat/channel.
     Catches all exceptions internally to prevent telegram errors from failing the caller.
     """
-    settings = Settings.from_env()
+    settings = Settings.from_env(env)
     token = settings.telegram_bot_token
     chat_id = settings.telegram_chat_id
 
@@ -32,11 +28,17 @@ async def send_telegram_notification(text: str) -> bool:
         payload["message_thread_id"] = settings.telegram_thread_id
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            logger.info("Telegram notification sent successfully.")
-            return True
+        from js import Object
+        opts = Object()
+        opts.method = "POST"
+        opts.headers = Object()
+        opts.headers["Content-Type"] = "application/json"
+        opts.body = json.dumps(payload)
+        from workers import fetch
+        await fetch(url, opts)
+        logger.info("Telegram notification sent successfully.")
+        return True
     except Exception as e:
         logger.error(f"Failed to send Telegram notification: {e}")
         return False
+

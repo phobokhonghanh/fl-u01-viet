@@ -38,3 +38,4 @@ build/
 !fotello/Fotello.spec
 !autohdr_exe/main.spec
 realtyedit/
+.wrangler/

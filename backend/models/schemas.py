@@ -57,12 +57,12 @@ class KeyRecord:
             return False # No expiration means valid indefinitely
 
         try:
-            expires_str = self.expires_at.replace("Z", "+00:00")
-            expires_dt = datetime.fromisoformat(expires_str)
-            now = datetime.now(expires_dt.tzinfo)
-            return now >= expires_dt
-        except (ValueError, TypeError):
+            clean_str = self.expires_at.replace("Z", "").split("+")[0]
+            expires_dt = datetime.fromisoformat(clean_str)
+            return datetime.utcnow() >= expires_dt
+        except Exception:
             return True
+
 
     def to_dict(self) -> dict:
         return {
