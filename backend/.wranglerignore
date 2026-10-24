@@ -4,4 +4,9 @@ scratch_send_test.py
 *.bak
 .venv-workers/
 vendor/
-
+secret/
+secret/**
+secret/*
+*.sql
+*.json
+.env*
