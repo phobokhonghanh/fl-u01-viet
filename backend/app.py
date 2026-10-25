@@ -43,20 +43,23 @@ def error_response(detail: str, status: int = 400) -> Response:
 
 async def read_json(request) -> dict:
     try:
-        if hasattr(request, "json"):
-            res = request.json()
-            if hasattr(res, "__await__") or asyncio.iscoroutine(res):
-                res = await res
-            if isinstance(res, dict):
-                return res
-    except Exception:
-        pass
-    try:
         if hasattr(request, "text"):
             t = request.text()
             if hasattr(t, "__await__") or asyncio.iscoroutine(t):
                 t = await t
-            return json.loads(str(t))
+            if t:
+                return json.loads(str(t))
+    except Exception:
+        pass
+    try:
+        if hasattr(request, "json"):
+            res = request.json()
+            if hasattr(res, "__await__") or asyncio.iscoroutine(res):
+                res = await res
+            if hasattr(res, "to_py"):
+                res = res.to_py()
+            if isinstance(res, dict):
+                return res
     except Exception:
         pass
     return {}
