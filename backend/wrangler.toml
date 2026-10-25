@@ -3,6 +3,7 @@ main = "app.py"
 
 compatibility_date = "2024-04-03"
 compatibility_flags = ["python_workers"]
+account_id = "ce5dc6a2b2fc3c3ff65983a09b67f1c8"
 
 [vars]
 FRONTEND_BASE_URL = "https://u01-viet.vercel.app/"

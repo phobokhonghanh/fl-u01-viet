@@ -1,0 +1,12 @@
+# Ignore secrets and local files from Wrangler upload
+secret/
+secret/**
+*.sql
+*.json
+.env*
+.wrangler/
+.venv-workers/
+tests/
+scripts/
+scratch_send_test.py
+*.bak

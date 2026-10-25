@@ -28,4 +28,14 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'ce5dc6a2b2fc3c3ff65983a09b67f1c8' }}
+          wranglerVersion: 'latest'
           workingDirectory: 'backend'
+
+      - name: Dump Wrangler error logs on failure
+        if: failure()
+        run: |
+          if [ -d "$HOME/.config/.wrangler/logs" ]; then
+            echo "=== Wrangler Error Logs ==="
+            cat $HOME/.config/.wrangler/logs/*.log
+          fi
