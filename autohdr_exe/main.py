@@ -1,8 +1,8 @@
 """
-AutoHDR Client EXE v2 — Entry Point.
+AutoHDR Client EXE v5 — Entry Point.
 
 Local pipeline execution: all AutoHDR API calls (Steps 1-7) run directly
-from this EXE. Railway server is only used for key validation.
+from this EXE. Cloudflare server is only used for key validation.
 """
 
 import customtkinter as ctk
