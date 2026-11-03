@@ -23,7 +23,7 @@ class ApiClient:
 
     def __init__(self, base_url: Optional[str] = None):
         if not base_url:
-            base_url = os.getenv("AUTOHDR_API_BASE", "https://u01-viet-backend.up.railway.app")
+            base_url = os.getenv("AUTOHDR_API_BASE", "https://u01-viet-backend.ndinhnguyen-work.workers.dev")
         self.base_url = base_url.rstrip("/")
         self.last_check_status = "idle"
 

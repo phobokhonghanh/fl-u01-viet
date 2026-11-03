@@ -19,7 +19,7 @@ def _build_payload(
     lastname: str,
     address: str,
     files_count: int,
-    indoor_model_id: int = 3,
+    indoor_model_id: Optional[int] = None,
     outdoor_model_id: Optional[int] = None,
 ) -> dict:
     """Build the request payload for associate-and-run."""
@@ -50,7 +50,7 @@ def execute(
     lastname: str,
     address: str,
     files_count: int,
-    indoor_model_id: int = 3,
+    indoor_model_id: Optional[int] = None,
     outdoor_model_id: Optional[int] = None,
 ) -> bool:
     """

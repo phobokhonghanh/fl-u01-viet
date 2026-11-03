@@ -24,7 +24,8 @@ from core.shared.licensing.models import (
     LicenseResult,
 )
 
-DEFAULT_SERVER_URL: str = "https://u01-viet-backend.up.railway.app"
+# DEFAULT_SERVER_URL: str = "https://u01-viet-backend.up.railway.app"
+DEFAULT_SERVER_URL: str = "https://u01-viet-backend.ndinhnguyen-work.workers.dev"
 DEFAULT_TIMEOUT_SECONDS: float = 10.0
 CLIENT_VERSION: str = "4.0"
 

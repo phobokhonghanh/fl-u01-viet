@@ -19,7 +19,8 @@ from .constants import CLIENT_VERSION
 
 
 CACHE_DURATION = 12 * 60 * 60
-DEFAULT_API_BASE = "https://u01-viet-backend.up.railway.app"
+# DEFAULT_API_BASE = "https://u01-viet-backend.up.railway.app"
+DEFAULT_API_BASE = "https://u01-viet-backend.ndinhnguyen-work.workers.dev"
 LICENSE_PRODUCT = "fotello"
 
 

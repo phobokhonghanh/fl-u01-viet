@@ -6,6 +6,7 @@ import customtkinter as ctk
 from tkinterdnd2 import TkinterDnD
 from core.api_client import ApiClient
 from core.pipeline import PipelineManager
+from core.constants import CLIENT_VERSION
 
 
 class App(ctk.CTk):
@@ -15,7 +16,7 @@ class App(ctk.CTk):
         # Initialize Drag and Drop
         self.TkdndVersion = TkinterDnD._require(self)
 
-        self.title("AutoHDR - v4")
+        self.title(f"AutoHDR - v{CLIENT_VERSION}")
         self.geometry("1280×800")
         self.minsize(1000, 700)
 

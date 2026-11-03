@@ -25,7 +25,7 @@ DEFAULT_TIMEOUT = (15, 120)
 class HttpClient:
     """
     Shared HTTP client wrapping requests.Session.
-    Connects directly to autohdr.com (not through Railway).
+    Connects directly to autohdr.com (not through Cloudflare Worker/Railway).
     """
 
     DEFAULT_USER_AGENT = (

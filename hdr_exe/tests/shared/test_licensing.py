@@ -340,3 +340,23 @@ def test_raw_key_not_leaked_in_events_or_manifests(tmp_licensing_dir: Path):
         res = check("fotello")
         assert secret_key not in res.message
         assert secret_key not in str(res.to_dict())
+
+
+def test_file_lock_cross_platform_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from core.shared.licensing.storage import _file_lock
+    lock_file = tmp_path / ".test.lock"
+
+    # Test when fcntl is None (e.g. Windows) and msvcrt is present
+    monkeypatch.setattr("core.shared.licensing.storage.fcntl", None)
+    mock_msvcrt = MagicMock()
+    monkeypatch.setattr("core.shared.licensing.storage.msvcrt", mock_msvcrt)
+
+    with _file_lock(lock_file):
+        assert lock_file.exists()
+    assert mock_msvcrt.locking.call_count == 2
+
+    # Test when both fcntl and msvcrt are None
+    monkeypatch.setattr("core.shared.licensing.storage.msvcrt", None)
+    with _file_lock(lock_file):
+        pass
+

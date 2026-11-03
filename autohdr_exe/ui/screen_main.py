@@ -45,6 +45,13 @@ from core.http_client import HttpClient
 from core.pipeline import PipelineManager, Job
 from core.utils import open_folder
 from steps import step0_session
+from models.available_models import (
+    CATEGORIES,
+    CATEGORY_INDOOR,
+    get_model_names_by_category,
+    get_model_by_name_and_category,
+    get_payload_model_ids,
+)
 
 
 class ScreenMain(ctk.CTkFrame):
@@ -254,25 +261,53 @@ class ScreenMain(ctk.CTkFrame):
         mode_buttons_frame.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 8))
 
         self.project_mode_frame = ctk.CTkFrame(left_panel, fg_color="transparent")
-        self.project_mode_frame.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 0))
-        # Project (left, expands)
-        ctk.CTkLabel(self.project_mode_frame, text="Project:", font=("Arial", 13)).pack(side="left", padx=2)
-        self.address_entry = ctk.CTkEntry(self.project_mode_frame, placeholder_text="Nhập Project name...", height=30, font=("Arial", 13))
+        self.project_mode_frame.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 4))
+
+        # Line 1: Project name
+        project_row = ctk.CTkFrame(self.project_mode_frame, fg_color="transparent")
+        project_row.pack(side="top", fill="x", expand=True, pady=(0, 6))
+        ctk.CTkLabel(project_row, text="Project:", font=("Arial", 13, "bold")).pack(side="left", padx=(2, 6))
+        self.address_entry = ctk.CTkEntry(project_row, placeholder_text="Nhập Project name...", height=30, font=("Arial", 13))
         self.address_entry.pack(side="left", fill="x", expand=True, padx=2)
         self.address_entry.insert(0, cache.get("address", "Demo Project"))
-        # Mode (right)
-        mode_container = ctk.CTkFrame(self.project_mode_frame, fg_color="transparent")
-        mode_container.pack(side="right", padx=(8, 0))
-        ctk.CTkLabel(mode_container, text="Mode:", font=("Arial", 13)).pack(side="left", padx=2)
-        self.mode_var = ctk.StringVar(value=cache.get("mode", "Lisa"))
-        self.mode_selector = ctk.CTkSegmentedButton(
-            mode_container,
-            values=["Classic", "Lisa", "No Sky"],
-            variable=self.mode_var,
-            command=lambda v: cache.set("mode", v),
+
+        # Line 2: Category and Model selection
+        model_row = ctk.CTkFrame(self.project_mode_frame, fg_color="transparent")
+        model_row.pack(side="top", fill="x", expand=True)
+
+        ctk.CTkLabel(model_row, text="Loại:", font=("Arial", 13, "bold")).pack(side="left", padx=(2, 6))
+
+        cached_category = cache.get("model_category", CATEGORY_INDOOR)
+        if cached_category not in CATEGORIES:
+            cached_category = CATEGORY_INDOOR
+        self.category_var = ctk.StringVar(value=cached_category)
+
+        self.category_selector = ctk.CTkSegmentedButton(
+            model_row,
+            values=CATEGORIES,
+            variable=self.category_var,
+            command=self._on_category_changed,
             height=30,
         )
-        self.mode_selector.pack(side="left", fill="x")
+        self.category_selector.pack(side="left", padx=(0, 10))
+
+        ctk.CTkLabel(model_row, text="Model:", font=("Arial", 13, "bold")).pack(side="left", padx=(2, 6))
+
+        initial_names = get_model_names_by_category(cached_category)
+        cached_model = cache.get("model_name", "Lisa" if cached_category == CATEGORY_INDOOR else (initial_names[0] if initial_names else ""))
+        if cached_model not in initial_names and initial_names:
+            cached_model = initial_names[0]
+
+        self.model_var = ctk.StringVar(value=cached_model)
+        self.model_selector = ctk.CTkComboBox(
+            model_row,
+            values=initial_names,
+            variable=self.model_var,
+            command=self._on_model_changed,
+            state="readonly",
+            height=30,
+        )
+        self.model_selector.pack(side="left", fill="x", expand=True, padx=2)
         # Mode buttons: Tự động / Thủ công (placed under cookie, above Project/Mode)
         self.btn_manual = ctk.CTkButton(
             mode_buttons_frame, text="URL", width=90, height=28,
@@ -679,6 +714,33 @@ class ScreenMain(ctk.CTkFrame):
         # Proxy support removed
         return
 
+    def _on_category_changed(self, new_category: str):
+        """Handle category selection change (Indoor, Outdoor, Both)."""
+        cache.set("model_category", new_category)
+        names = get_model_names_by_category(new_category)
+        self.model_selector.configure(values=names)
+
+        # Restore previously chosen model for this category or default
+        cached_for_cat = cache.get(f"model_name_{new_category}")
+        if cached_for_cat and cached_for_cat in names:
+            selected = cached_for_cat
+        else:
+            if new_category == CATEGORY_INDOOR and "Lisa" in names:
+                selected = "Lisa"
+            elif names:
+                selected = names[0]
+            else:
+                selected = ""
+
+        self.model_var.set(selected)
+        cache.set("model_name", selected)
+
+    def _on_model_changed(self, new_model_name: str):
+        """Handle model selection change."""
+        cache.set("model_name", new_model_name)
+        cat = self.category_var.get()
+        cache.set(f"model_name_{cat}", new_model_name)
+
     def _create_and_start_job(self, address: str):
         """Create job and add to UI (must run on main thread)."""
         cache.set("address", address)
@@ -689,16 +751,12 @@ class ScreenMain(ctk.CTkFrame):
         # Get proxy config
         proxy_config = {}
 
-        # Get model IDs from mode selection
-        mode = self.mode_var.get()
-        indoor_model_id = 3
-        outdoor_model_id = None
-
-        if mode == "Classic":
-            indoor_model_id = 1
-        elif mode == "No Sky":
-            indoor_model_id = 4
-            outdoor_model_id = 4
+        # Get model IDs from category and model selection
+        category = self.category_var.get()
+        model_name = self.model_var.get()
+        model = get_model_by_name_and_category(model_name, category)
+        model_id = model["id"] if model else (3 if category == CATEGORY_INDOOR else 1)
+        indoor_model_id, outdoor_model_id = get_payload_model_ids(category, model_id)
 
         # Create job
         job = self.pipeline_mgr.create_job(

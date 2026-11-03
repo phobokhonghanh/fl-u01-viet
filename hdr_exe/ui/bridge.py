@@ -321,6 +321,17 @@ class BridgeApi:
 
         exec_mode = str(options.get("exec_mode", "single")).lower()
 
+        # Check input directory exists and contains valid images
+        input_dir = options.get("input_dir", "")
+        if not input_dir or not Path(input_dir).is_dir():
+            return {"success": False, "message": "Thư mục ảnh đầu vào không tồn tại hoặc chưa được chọn."}
+
+        bracket_size = int(options.get("bracket_size", 3))
+        inspect_res = self.inspect_input_folder(eng, input_dir, bracket_size=bracket_size)
+        if not inspect_res.get("valid") or inspect_res.get("outputs", 0) == 0:
+            err_msg = inspect_res.get("error") or f"Thư mục đầu vào không chứa ảnh hợp lệ cho {eng.upper()}."
+            return {"success": False, "message": err_msg}
+
         # Enforce licensing entitlements before starting
         try:
             require_access(eng, exec_mode)

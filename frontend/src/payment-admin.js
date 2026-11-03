@@ -1,5 +1,6 @@
 // Payment Admin Logic
-const API_BASE = import.meta.env?.VITE_API_BASE || "https://autohdr-backend.up.railway.app";
+// const API_BASE = import.meta.env?.VITE_API_BASE || "https://autohdr-backend.up.railway.app";
+const API_BASE = import.meta.env?.VITE_API_BASE || "https://u01-viet-backend.ndinhnguyen-work.workers.dev";
 
 // === DOM References ===
 const adminPassInput = document.getElementById('admin-pass');

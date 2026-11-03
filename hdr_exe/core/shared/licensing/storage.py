@@ -6,11 +6,20 @@ using atomic file replacement and strict file permissions.
 from __future__ import annotations
 
 from contextlib import contextmanager
-import fcntl
 import json
 import os
 import time
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore
+
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None  # type: ignore
 
 from core.shared.config import get_licensing_keys_path
 from core.shared.licensing.models import CODE_STORAGE_ERROR, LicensingError
@@ -18,17 +27,31 @@ from core.shared.licensing.models import CODE_STORAGE_ERROR, LicensingError
 
 @contextmanager
 def _file_lock(lock_path: Path):
-    """Quản lý khóa độc quyền file (flock) cho thao tác đọc-sửa-ghi file keys."""
+    """Quản lý khóa độc quyền file cho thao tác đọc-sửa-ghi file keys (cross-platform)."""
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with open(lock_path, "a") as f:
-        try:
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-            yield
-        finally:
+        if fcntl is not None and hasattr(fcntl, "flock"):
             try:
-                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-            except OSError:
-                pass
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                yield
+            finally:
+                try:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                except OSError:
+                    pass
+        elif msvcrt is not None and hasattr(msvcrt, "locking"):
+            try:
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+                yield
+            finally:
+                try:
+                    f.seek(0)
+                    msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                except (OSError, ValueError):
+                    pass
+        else:
+            yield
 
 
 def _atomic_write_keys(path: Path, data: dict[str, str]) -> None:
