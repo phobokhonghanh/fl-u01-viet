@@ -650,7 +650,8 @@ class ScreenMain(ctk.CTkFrame):
             return
 
         # Extract UUID from URL
-        m = re.search(r"/photoshoots/([0-9a-fA-F\-]{8,36})", url)
+        # m = re.search(r"/photoshoots/([0-9a-fA-F\-]{8,36})", url)
+        m = re.search(r"/photoshoots/([a-zA-Z0-9\-]{8,36})", url)
         if not m:
             # Invalid URL
             return

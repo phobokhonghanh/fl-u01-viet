@@ -66,6 +66,7 @@ def execute(
 
     try:
         response = client.post("/api/inference/associate-and-run", json_data=payload)
+        # response = client.post("/api/process-links", json_data=payload)
 
         if response.status_code != 200:
             log(logger, "ERROR", step, f"HTTP {response.status_code}: {response.text}")
