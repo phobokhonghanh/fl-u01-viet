@@ -2,11 +2,23 @@
 Main Application Controller — manages screen switching.
 """
 
+import os
+import sys
 import customtkinter as ctk
 from tkinterdnd2 import TkinterDnD
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TM_DIR = os.path.join(PROJECT_ROOT, "1tm")
+LIBS_DIR = os.path.join(TM_DIR, "libs")
+if TM_DIR not in sys.path:
+    sys.path.insert(0, TM_DIR)
+if LIBS_DIR not in sys.path:
+    sys.path.insert(0, LIBS_DIR)
+
 from core.api_client import ApiClient
 from core.pipeline import PipelineManager
 from core.constants import CLIENT_VERSION
+from jobs import JobRunner
 
 
 class App(ctk.CTk):
@@ -22,6 +34,7 @@ class App(ctk.CTk):
 
         self.api = ApiClient()
         self.pipeline_mgr = PipelineManager()
+        self.job_runner = JobRunner()
 
         # Container for screens
         self.container = ctk.CTkFrame(self, fg_color="transparent")
