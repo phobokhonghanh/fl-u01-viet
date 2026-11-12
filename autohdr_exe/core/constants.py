@@ -2,4 +2,4 @@
 Application constants for AutoHDR.
 """
 
-CLIENT_VERSION = "5.0"
+CLIENT_VERSION = "6.0"

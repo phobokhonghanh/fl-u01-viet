@@ -1,5 +1,5 @@
 """
-AutoHDR Client EXE v5 — Entry Point.
+AutoHDR Client EXE v6 — Entry Point.
 
 Local pipeline execution: all AutoHDR API calls (Steps 1-7) run directly
 from this EXE. Cloudflare server is only used for key validation.
@@ -21,7 +21,30 @@ external_env = os.path.join(os.getcwd(), '.env')
 load_dotenv(external_env, override=True)
 
 # Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, PROJECT_ROOT)
+
+# Add 1tm and 1tm/libs to path for multi-engine jobs & auth
+TM_DIR = os.path.join(PROJECT_ROOT, "1tm")
+LIBS_DIR = os.path.join(TM_DIR, "libs")
+if TM_DIR not in sys.path:
+    sys.path.insert(0, TM_DIR)
+if LIBS_DIR not in sys.path:
+    sys.path.insert(0, LIBS_DIR)
+
+# Smoke test flag for CI/CD packaging validation
+if "--smoke-test" in sys.argv:
+    from ui.app import App
+    from ui.screen_main import ScreenMain
+    from ui.screen_key import ScreenKey
+    from ui.accounts_dialog import AccountsDialog
+    from ui.settings_dialog import SettingsDialog
+    from jobs import JobRunner, AutoHDRJob, AutoenhanceJob, AutoenhanceDownloadJob
+    from libs.auth import get_active_session, authenticate
+    from libs.executor import ExecutorRegistry
+    from PIL import Image
+    print("Smoke test passed: All critical modules imported successfully.")
+    sys.exit(0)
 
 from ui.app import App
 

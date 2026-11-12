@@ -35,7 +35,7 @@ class HttpClient:
 
     def __init__(self, base_url: Optional[str] = None, cookie: str = "", user_agent: Optional[str] = None):
         if not base_url:
-            base_url = os.getenv("AUTOHDR_BASE_URL", "https://www.autohdr.com")
+            base_url = os.getenv("AUTOHDR_BASE_URL", "https://old.autohdr.com")
         self.base_url = base_url.rstrip("/")
         self.cookie = cookie
         self.user_agent = user_agent or self.DEFAULT_USER_AGENT

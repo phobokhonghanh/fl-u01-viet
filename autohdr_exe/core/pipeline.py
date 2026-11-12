@@ -600,7 +600,7 @@ class PipelineManager:
                 response.raise_for_status()
                 data = response.json()
             except Exception as e:
-                raise Exception(f"Không lấy được photoshoot_uuid")
+                raise Exception(f"Không lấy được photoshoot_uuid: {e}")
 
             if len(data) == 0:
                 raise Exception("Không có ảnh")
@@ -651,7 +651,6 @@ class PipelineManager:
         except Exception as e:
             job.status = "failed"
             job.error = str(e)
-            print(e.message)
             _log("ERROR", 0, f"Share pipeline lỗi: {e}")
         finally:
             # === Resource Cleanup ===

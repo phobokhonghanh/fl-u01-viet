@@ -1,0 +1,11 @@
+| STT | Bước Workflow | File module | Function đảm nhiệm | Mô tả chức năng |
+| :---: | --- | --- | --- | --- |
+| 0 | Lập kế hoạch Job (Khởi tạo) | `workflow.py` | `build_autoenhance_outputs()`<br>`run_workflow()` | Thu thập ảnh đầu vào, chống trùng lặp `output_id`, phân bổ job theo giới hạn tài nguyên (limits). |
+| 1 | `auth`<br>(Xác thực API) | `auth.py`<br>`workflow.py` | `load_api_key()`<br>`validate_api_key()` | Kiểm tra và nạp API key của Autoenhance v3. |
+| 2 | `prepare`<br>(Chuẩn bị & Chuyển đổi) | `upload.py`<br>`images.py` | `prepare_upload_files()`<br>`convert_to_jpg()`<br>`get_image_dimensions()` | Chuẩn hóa định dạng ảnh sang JPEG, lưu lại kích thước ảnh gốc (`meta_dims`) vào bộ nhớ tạm. |
+| 3 | `create_order`<br>(Tạo đơn hàng) | `orders.py`<br>`metadata.py`<br>`client.py` | `create_order()`<br>`save_order_metadata()`<br>`_api_post()` | Gửi POST `/orders/` tạo đơn hàng mới, lấy `order_id` và lưu metadata kích thước ra file JSON nguyên tử. |
+| 4 | `upload`<br>(Tải ảnh lên S3) | `upload.py` | `get_upload_s3_info()`<br>`_upload_one_file()` | Xin presigned URL từ `/images/`, sau đó upload song song nhiều luồng qua `ThreadPoolExecutor` lên AWS S3. |
+| 5 | `execute`<br>(Kích hoạt xử lý AI) | `execute.py`<br>`options.py`<br>`client.py` | `map_options_to_payload()`<br>`trigger_process()`<br>`_api_post()` | Ánh xạ tùy chọn người dùng (preset, góc nhìn, bầu trời, cửa sổ...) thành payload và POST `/orders/{id}/process`. |
+| 6 | `polling`<br>(Chờ xử lý hoàn tất) | `polling.py`<br>`orders.py`<br>`client.py` | `poll_order_completion()`<br>`get_order_details()`<br>`get_order_brackets()`<br>`filter_final_processed_images()` | Lặp thăm dò trạng thái qua GET `/orders/{id}` mỗi 5s (tối đa 30p), sau đó lọc ra đúng các ảnh thành phẩm cuối cùng. |
+| 7 | `download`<br>(Tải & Hậu xử lý ảnh) | `download.py`<br>`image_processing.py`<br>`metadata.py` | `download_and_process_image()`<br>`_download_one_file()`<br>`_process_downloaded_png()`<br>`load_order_metadata()` | Tải luồng file PNG từ `/images/{id}/enhanced`, khử kênh trong suốt (alpha), resize Lanczos về kích thước gốc, làm nét UnsharpMask và lưu JPEG 300 DPI. |
+| 8 | `export`<br>(Hoàn tất & Kiểm toán) | `workflow.py` | `_write_job_manifest()`<br>`_create_result()` | Ghi file manifest lưu vết kiểm toán (`manifest_..._attX.json`), tổng kết số lượng ảnh đạt/lỗi. |

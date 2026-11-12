@@ -45,17 +45,46 @@ jobs:
           pip install pyinstaller
           pip install -r autohdr_exe/requirements.txt
 
-      - name: Đóng gói Windows (.exe)
-        if: runner.os == 'Windows'
+      - name: Kiểm tra import (Smoke Test)
         working-directory: ./autohdr_exe
         run: |
-          pyinstaller --onefile --noconsole --name AutoHDR_Client_${{ env.VERSION }} main.py
+          python main.py --smoke-test
+
+      - name: Đóng gói Windows (.exe)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: ./autohdr_exe
+        run: |
+          pyinstaller `
+            --onefile `
+            --noconsole `
+            --name AutoHDR_Client_${{ env.VERSION }} `
+            --paths "." `
+            --paths "1tm" `
+            --paths "1tm/libs" `
+            --collect-submodules jobs `
+            --collect-submodules libs `
+            --collect-submodules PIL `
+            --collect-submodules requests `
+            --collect-data certifi `
+            main.py
 
       - name: Đóng gói macOS
         if: runner.os != 'Windows'
         working-directory: ./autohdr_exe
         run: |
-          pyinstaller --windowed --name AutoHDR_Client_macOS_${{ env.VERSION }} main.py
+          pyinstaller \
+            --windowed \
+            --name AutoHDR_Client_macOS_${{ env.VERSION }} \
+            --paths "." \
+            --paths "1tm" \
+            --paths "1tm/libs" \
+            --collect-submodules jobs \
+            --collect-submodules libs \
+            --collect-submodules PIL \
+            --collect-submodules requests \
+            --collect-data certifi \
+            main.py
           cd dist
           ditto -c -k --sequesterRsrc --keepParent "AutoHDR_Client_macOS_${{ env.VERSION }}.app" "AutoHDR_Client_macOS_${{ env.VERSION }}.zip"
 
