@@ -10,6 +10,7 @@ from .autoenhance import (
     poll_order_completion,
     apply_pil_postprocess,
     download_order_images,
+    filter_final_processed_images,
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "poll_order_completion",
     "apply_pil_postprocess",
     "download_order_images",
+    "filter_final_processed_images",
 ]

@@ -13,6 +13,7 @@ ENDPOINT_VALIDATION: str = "/orders/?per_page=1"
 ENDPOINT_ORDERS: str = "/orders/"
 ENDPOINT_ORDER_DETAIL: str = "/orders/{order_id}"
 ENDPOINT_ORDER_BRACKETS: str = "/orders/{order_id}/brackets"
+ENDPOINT_BRACKETS: str = "/brackets/"
 ENDPOINT_IMAGES: str = "/images/"
 ENDPOINT_PROCESS: str = "/orders/{order_id}/process"
 ENDPOINT_ENHANCED_IMAGE: str = "/images/{image_id}/enhanced"
@@ -23,12 +24,15 @@ STORAGE_FILENAME: str = "autoenhance.json"
 # Network defaults
 USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 DEFAULT_TIMEOUT: int = 30
-DEFAULT_POLL_INTERVAL: int = 5
 DEFAULT_MAX_WAIT_SECONDS: int = 1800
 DOWNLOAD_CHUNK_SIZE: int = 65536
-MAX_API_WORKERS: int = 4
-MAX_DOWNLOAD_WORKERS: int = 4
-
+DEFAULT_POLL_INTERVAL: int = 10
+MAX_API_WORKERS: int = 2
+MAX_DOWNLOAD_WORKERS: int = 2
+# PLUS
+# DEFAULT_POLL_INTERVAL: int = 5
+# MAX_API_WORKERS: int = 4
+# MAX_DOWNLOAD_WORKERS: int = 4
 # Limits
 MAX_UPLOAD_FILES: int = 120
 

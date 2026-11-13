@@ -19,6 +19,7 @@ from libs.constants.autoenhance import (
     DEFAULT_MAX_WAIT_SECONDS,
     DOWNLOAD_CHUNK_SIZE,
     ENDPOINT_ORDER_DETAIL,
+    ENDPOINT_ORDER_BRACKETS,
     ENHANCED_IMAGE_QUERY,
     MAX_DOWNLOAD_WORKERS,
 )
@@ -150,6 +151,75 @@ def apply_pil_postprocess(
         src_path.replace(dest_path)
 
 
+def filter_final_processed_images(
+    order_id: str,
+    images: List[Dict[str, Any]],
+    headers: Dict[str, str],
+    session: Optional[requests.Session] = None,
+    log_fn: Optional[Any] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Lọc danh sách ảnh hoàn tất để chỉ giữ lại ảnh thành phẩm cuối cùng (Final Output).
+    1. Ưu tiên tra cứu /orders/{order_id}/brackets: Các bracket luôn liên kết đến image_id thành phẩm cuối cùng.
+    2. Fallback heuristic:
+       - Nếu có ảnh chứa 'Manually Grouped' trong metadata (do endpoint /process sinh ra),
+         chỉ giữ lại các ảnh có trường này.
+       - Với các ảnh có cùng tên file (image_name), chỉ giữ lại ảnh mới nhất (date_added lớn nhất).
+    """
+    img_list = list(images)
+    if not img_list:
+        return []
+
+    # 1. Thử lấy target image_ids từ brackets endpoint
+    if order_id:
+        try:
+            requester = session if session is not None else requests
+            url = f"{API_BASE}{ENDPOINT_ORDER_BRACKETS.format(order_id=order_id)}"
+            resp = requester.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
+            if resp.status_code == 200:
+                data = resp.json()
+                brackets = data.get("brackets", [])
+                target_ids = {str(b.get("image_id")) for b in brackets if b.get("image_id")}
+                if target_ids:
+                    matched = [img for img in img_list if str(img.get("image_id") or img.get("id", "")) in target_ids]
+                    if matched:
+                        if log_fn:
+                            log_fn("INFO", f"[Autoenhance][Order] Đã lọc {len(matched)}/{len(img_list)} ảnh kết quả theo brackets.")
+                        return matched
+        except Exception as exc:
+            if log_fn:
+                log_fn("WARN", f"[Autoenhance][Order] Không thể đọc danh sách brackets: {exc}")
+
+    # 2. Heuristic fallback:
+    # 2a. Nếu có ảnh thành phẩm do /process tạo ra (Manually Grouped hoặc preset_id)
+    processed_imgs = [
+        img for img in img_list
+        if (
+            isinstance(img.get("metadata"), dict) and "Manually Grouped" in img["metadata"]
+        ) or img.get("preset_id") is not None
+    ]
+    candidate_pool = processed_imgs if processed_imgs else img_list
+
+    # 2b. Khử trùng lặp theo tên: Nếu có nhiều ảnh trùng filename, chọn ảnh có date_added mới nhất
+    by_name: Dict[str, Dict[str, Any]] = {}
+    for img in candidate_pool:
+        name = str(img.get("image_name") or img.get("filename") or "")
+        key = name.strip().lower() if name else str(img.get("image_id") or img.get("id", ""))
+        if key not in by_name:
+            by_name[key] = img
+        else:
+            prev = by_name[key]
+            prev_date = prev.get("date_added") or 0
+            cur_date = img.get("date_added") or 0
+            if cur_date >= prev_date:
+                by_name[key] = img
+
+    filtered = list(by_name.values())
+    if len(filtered) < len(img_list) and log_fn:
+        log_fn("INFO", f"[Autoenhance][Order] Đã loại bỏ {len(img_list) - len(filtered)} ảnh sơ bộ, giữ lại {len(filtered)} ảnh hoàn thành cuối cùng.")
+    return filtered
+
+
 def download_order_images(
     context: Any,
     session: Optional[requests.Session],
@@ -165,6 +235,17 @@ def download_order_images(
     """
     if hasattr(context, "is_cancelled") and context.is_cancelled():
         return False
+
+    # Lọc bỏ ảnh draft/sơ bộ nếu có
+    order_id = getattr(context, "remote_job_id", "") or getattr(context, "extra_data", {}).get("order_id", "")
+    if order_id:
+        completed_images = filter_final_processed_images(
+            order_id=order_id,
+            images=completed_images,
+            headers=headers,
+            session=session,
+            log_fn=getattr(context, "log", None),
+        )
 
     out_dir = Path(getattr(context, "output_dir", "."))
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -241,6 +322,8 @@ def download_order_images(
                 f.write(chunk)
 
         meta_dims = getattr(context, "meta_dims", {})
+        # PLUS
+        time.sleep(1)  # Giãn cách 1s giữa mỗi lượt tải và xử lý PIL
         apply_pil_postprocess(temp_raw, dest_file, meta_dims.get(orig_name))
 
         if temp_raw.exists():
