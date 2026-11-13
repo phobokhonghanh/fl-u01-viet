@@ -25,3 +25,7 @@ DEFAULT_USER_AGENT: str = (
 )
 DEFAULT_TIMEOUT: tuple[int, int] = (15, 120)
 
+# Limits
+MAX_UPLOAD_FILES: int = 120
+
+

@@ -29,6 +29,9 @@ DOWNLOAD_CHUNK_SIZE: int = 65536
 MAX_API_WORKERS: int = 4
 MAX_DOWNLOAD_WORKERS: int = 4
 
+# Limits
+MAX_UPLOAD_FILES: int = 120
+
 # Image queries: Tải ảnh thành phẩm gốc chất lượng cao không watermark (preview=false)
 ENHANCED_IMAGE_QUERY: str = "format=png&watermark=false&preview=true&quality=90&scale=1&max_width=8192"
 

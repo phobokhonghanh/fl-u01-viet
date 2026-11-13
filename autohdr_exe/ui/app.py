@@ -16,7 +16,6 @@ if LIBS_DIR not in sys.path:
     sys.path.insert(0, LIBS_DIR)
 
 from core.api_client import ApiClient
-from core.pipeline import PipelineManager
 from core.constants import CLIENT_VERSION
 from jobs import JobRunner
 
@@ -29,11 +28,10 @@ class App(ctk.CTk):
         self.TkdndVersion = TkinterDnD._require(self)
 
         self.title(f"AutoHDR - v{CLIENT_VERSION}")
-        self.geometry("1280×800")
+        self.geometry("1280x800")
         self.minsize(1000, 700)
 
         self.api = ApiClient()
-        self.pipeline_mgr = PipelineManager()
         self.job_runner = JobRunner()
 
         # Container for screens

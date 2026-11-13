@@ -28,6 +28,7 @@ from libs.constants.autohdr import (
     ENDPOINT_FINALIZE_UPLOAD,
     ENDPOINT_PHOTOSHOOTS,
     ENDPOINT_PRESIGNED_URLS,
+    MAX_UPLOAD_FILES,
 )
 from libs.executor.base import BaseExecutor, ExecutionContext
 from libs.auth import get_active_session
@@ -36,6 +37,8 @@ from libs.utils import run_parallel, poll_until, PollStatus, make_progress_repor
 
 class AutoHDRJob(BaseExecutor):
     """Executor chuyên trách xử lý job cho engine AutoHDR."""
+
+    max_upload_files: int = MAX_UPLOAD_FILES
 
     def __init__(
         self,

@@ -208,11 +208,43 @@ def test_registry():
     print("  -> PASS: ExecutorRegistry hoạt động chuẩn xác, không phân biệt hoa thường.")
 
 
+def test_gatekeeper_max_upload_files_limit():
+    print("[TEST] 7. Kiểm thử HẬU KIỂM CHỐT CHẶN: Vượt quá giới hạn max_upload_files...")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        files = []
+        for i in range(5):
+            f = temp_path / f"img_{i}.jpg"
+            f.write_bytes(b"image_content")
+            files.append(str(f))
+
+        context = ExecutionContext(
+            job_id="job_007",
+            file_paths=files,
+            output_dir=str(temp_path / "out"),
+        )
+
+        class LimitedExecutor(BaseExecutor):
+            max_upload_files = 3  # Hạn mức chỉ cho tối đa 3 files
+
+            def transform(self, context: ExecutionContext) -> bool:
+                return True
+
+        executor = LimitedExecutor()
+        res = executor.execute(context)
+
+        assert res.status == "failed"
+        assert "vượt quá giới hạn cho phép tối đa" in res.error_message
+        assert "3 files" in res.error_message
+        print("  -> PASS: Lớp cha chặn đứng khi số lượng file vượt quá max_upload_files của Provider.")
+
+
 if __name__ == "__main__":
     test_successful_execution()
     test_failing_execution()
     test_cancellation()
     test_gatekeeper_empty_ready_files()
     test_gatekeeper_zero_byte_file()
+    test_gatekeeper_max_upload_files_limit()
     test_registry()
     print("\n✅ TOÀN BỘ CÁC BÀI TEST (BAO GỒM HẬU KIỂM CHỐT CHẶN) ĐỀU ĐẠT 100%!")

@@ -1,23 +1,41 @@
 """
-Settings Dialog — Modal dialog for application settings (Download dir, etc.)
+Settings Dialog — Màn hình Cài đặt gộp chung hệ thống.
+Bao gồm:
+- Tab 1: Lưu (StorageTabFrame)
+- Tab 2: Quản lý account (AccountsTabFrame)
+- Nút Bản quyền (License Key) được đưa vào trong Settings.
 """
-import os
 import customtkinter as ctk
-from tkinter import filedialog
-from core.cache import cache
+from typing import Optional, Callable
+from ui.tab_storage import StorageTabFrame
+from ui.tab_accounts import AccountsTabFrame
+from libs.auth import BaseSessionRecord
 
 
 class SettingsDialog(ctk.CTkToplevel):
-    def __init__(self, master, current_download_dir: str, on_save_callback=None):
+    def __init__(
+        self,
+        master,
+        app=None,
+        current_download_dir: str = "",
+        on_save_storage: Optional[Callable[[str], None]] = None,
+        on_change_account: Optional[Callable[[str, Optional[BaseSessionRecord]], None]] = None,
+        initial_tab: str = "storage",
+        initial_engine: str = "autohdr",
+    ):
         super().__init__(master)
+        self.app = app or getattr(master, "app", None)
         self.title("Cài Đặt Hệ Thống")
-        self.geometry("520x240")
+        self.geometry("640x580")
         self.resizable(False, False)
         self.transient(master)
         self.grab_set()
 
-        self.on_save_callback = on_save_callback
-        self.download_dir = current_download_dir
+        self.current_download_dir = current_download_dir
+        self.on_save_storage = on_save_storage
+        self.on_change_account = on_change_account
+        self.initial_tab = initial_tab
+        self.initial_engine = initial_engine
 
         self._build_ui()
         self.center_window()
@@ -32,85 +50,76 @@ class SettingsDialog(ctk.CTkToplevel):
 
     def _build_ui(self):
         main_frame = ctk.CTkFrame(self, fg_color="transparent")
-        main_frame.pack(fill="both", expand=True, padx=20, pady=15)
+        main_frame.pack(fill="both", expand=True, padx=16, pady=12)
 
-        # Title
+        # Header: Title + License Key button (Đưa icon key vào trong setting)
+        header_row = ctk.CTkFrame(main_frame, fg_color="transparent")
+        header_row.pack(fill="x", pady=(0, 6))
+
         ctk.CTkLabel(
-            main_frame,
-            text="⚙ Cài Đặt",
-            font=("Arial", 16, "bold")
-        ).pack(anchor="w", pady=(0, 10))
+            header_row,
+            text="⚙ Cài Đặt Hệ Thống",
+            font=("Arial", 18, "bold")
+        ).pack(side="left")
 
-        # Download directory
-        ctk.CTkLabel(
-            main_frame,
-            text="Thư mục đầu ra (Download Dir):",
-            font=("Arial", 12, "bold")
-        ).pack(anchor="w", pady=(5, 3))
-
-        dir_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
-        dir_frame.pack(fill="x", expand=True, pady=(0, 5))
-
-        self.dir_entry = ctk.CTkEntry(dir_frame, font=("Arial", 12), height=32)
-        self.dir_entry.insert(0, self.download_dir)
-        self.dir_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
-
+        # Nút License Key nằm góc trên phải của Settings
         ctk.CTkButton(
-            dir_frame,
-            text="📂 Duyệt",
-            width=70,
-            height=32,
+            header_row,
+            text="🔑 Bản quyền",
+            width=100,
+            height=30,
             font=("Arial", 12, "bold"),
-            command=self._select_dir,
-            fg_color="#4B5563",
-            hover_color="#374151"
+            fg_color="#7C3AED",
+            hover_color="#6D28D9",
+            command=self._open_license_key,
         ).pack(side="right")
 
-        ctk.CTkLabel(
-            main_frame,
-            text="Tất cả ảnh thành phẩm tải về từ AutoHDR và Autoenhance sẽ lưu tại đây.",
-            font=("Arial", 10),
-            text_color="#9CA3AF"
-        ).pack(anchor="w", pady=(0, 15))
+        # Tabview chính
+        self.tabview = ctk.CTkTabview(main_frame, height=460)
+        self.tabview.pack(fill="both", expand=True, pady=(0, 8))
 
-        # Buttons
-        btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
-        btn_frame.pack(fill="x", side="bottom")
+        self.tab_storage = self.tabview.add("Lưu")
+        self.tab_accounts = self.tabview.add("Quản lý account")
+
+        # Tab 1: Lưu
+        self.storage_frame = StorageTabFrame(
+            self.tab_storage,
+            current_download_dir=self.current_download_dir,
+            on_save_callback=self.on_save_storage,
+        )
+        self.storage_frame.pack(fill="both", expand=True)
+
+        # Tab 2: Quản lý Account
+        self.accounts_frame = AccountsTabFrame(
+            self.tab_accounts,
+            initial_engine=self.initial_engine,
+            on_change_callback=self.on_change_account,
+        )
+        self.accounts_frame.pack(fill="both", expand=True)
+
+        # Chọn tab khởi tạo
+        if self.initial_tab == "accounts":
+            self.tabview.set("Quản lý account")
+        else:
+            self.tabview.set("Lưu")
+
+        # Footer row: Nút Đóng
+        footer_row = ctk.CTkFrame(main_frame, fg_color="transparent")
+        footer_row.pack(fill="x")
 
         ctk.CTkButton(
-            btn_frame,
+            footer_row,
             text="Đóng",
-            width=80,
+            width=90,
             height=32,
             font=("Arial", 12),
             fg_color="#374151",
             hover_color="#1F2937",
-            command=self.destroy
-        ).pack(side="right", padx=(5, 0))
-
-        ctk.CTkButton(
-            btn_frame,
-            text="Lưu cấu hình",
-            width=110,
-            height=32,
-            font=("Arial", 12, "bold"),
-            fg_color="#059669",
-            hover_color="#047857",
-            command=self._save
+            command=self.destroy,
         ).pack(side="right")
 
-    def _select_dir(self):
-        init_dir = self.dir_entry.get().strip() or os.path.expanduser("~/Downloads")
-        chosen = filedialog.askdirectory(title="Chọn thư mục lưu ảnh", initialdir=init_dir)
-        if chosen:
-            self.dir_entry.delete(0, "end")
-            self.dir_entry.insert(0, chosen)
-
-    def _save(self):
-        new_dir = self.dir_entry.get().strip()
-        if new_dir:
-            cache.set("download_dir", new_dir)
-            if self.on_save_callback:
-                self.on_save_callback(new_dir)
+    def _open_license_key(self):
+        """Chuyển sang màn hình kích hoạt bản quyền."""
         self.destroy()
-
+        if self.app and hasattr(self.app, "show_key_screen"):
+            self.app.show_key_screen()

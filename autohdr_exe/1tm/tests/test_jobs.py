@@ -8,7 +8,7 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 # Đưa 1tm và autohdr_exe vào sys.path để chạy test độc lập
 TM_DIR = Path(__file__).resolve().parent.parent
@@ -19,18 +19,22 @@ sys.path.insert(0, str(LIBS_DIR))
 sys.path.insert(0, str(AUTOHDR_DIR))
 
 from libs.executor import ExecutionContext, ExecutorRegistry
-from jobs import AutoHDRJob, AutoenhanceJob, AutoenhanceDownloadJob
+from jobs import AutoHDRJob, AutoHDRDownloadJob, AutoenhanceJob, AutoenhanceDownloadJob
 
 
 def test_registry_auto_registration():
     print("[TEST] 1. Kiểm thử tự động đăng ký Provider vào ExecutorRegistry...")
     assert ExecutorRegistry.get("autohdr") is AutoHDRJob
     assert ExecutorRegistry.get("AUTOHDR") is AutoHDRJob
+    assert ExecutorRegistry.get("autohdr_download") is AutoHDRDownloadJob
     assert ExecutorRegistry.get("autoenhance") is AutoenhanceJob
     assert ExecutorRegistry.get("AUTOENHANCE") is AutoenhanceJob
+    assert ExecutorRegistry.get("autoenhance_download") is AutoenhanceDownloadJob
     assert "autohdr" in ExecutorRegistry.list_available()
+    assert "autohdr_download" in ExecutorRegistry.list_available()
     assert "autoenhance" in ExecutorRegistry.list_available()
-    print("  -> PASS: Cả 2 engine AutoHDR và Autoenhance đã tự động đăng ký vào Registry.")
+    assert "autoenhance_download" in ExecutorRegistry.list_available()
+    print("  -> PASS: Toàn bộ 4 engine (Upload & Download cho cả AutoHDR và Autoenhance) đã tự động đăng ký vào Registry.")
 
 
 def test_autohdr_job_missing_auth():
@@ -388,9 +392,10 @@ def test_autoenhance_trigger_process_and_preview_false_download():
             output_dir=str(temp_p / "out"),
             credentials={"api_key": "test_key"},
             preferences={
-                "sky_replacement": "sunny",
-                "vertical_correction": True,
+                "cloud_type": "LOW_CLOUD",
+                "perspective_correction_mode": "PRESERVE_CONTENT",
                 "lens_correction": True,
+                "number_of_brackets_per_image": "1",
             },
         )
 
@@ -409,7 +414,7 @@ def test_autoenhance_trigger_process_and_preview_false_download():
         assert captured_process_payload.get("cloud_type") == "LOW_CLOUD"  # Enum OpenAPI
         assert captured_process_payload.get("perspective_correction") is True
         assert captured_process_payload.get("perspective_correction_mode") == "PRESERVE_CONTENT"
-        assert captured_process_payload.get("number_of_brackets_per_image") == 0
+        assert captured_process_payload.get("number_of_brackets_per_image") == "1"
 
         # 4. Kiểm tra URL tải ảnh có preview=false (không có watermark)
         captured_dl_url = ""
@@ -666,6 +671,109 @@ def test_autoenhance_download_job_from_order_id():
             print("  -> PASS: AutoenhanceDownloadJob vượt qua hậu kiểm không cần file nguồn và hoàn tất tải về.")
 
 
+def test_autohdr_download_job():
+    print("[TEST] 11. Kiểm thử AutoHDRDownloadJob (tải ảnh qua photoshoot URL)...")
+    from unittest.mock import patch, MagicMock
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        out_p = Path(temp_dir) / "output"
+        context = ExecutionContext(
+            job_id="hdr_dl_test",
+            file_paths=[],
+            output_dir=str(out_p),
+            credentials={"cookie": "test_cookie=1"},
+            preferences={"photoshoot_uuid": "11111111-2222-3333-4444-555555555555"},
+        )
+
+        mock_session = MagicMock()
+        mock_res = MagicMock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {"id": 12345}
+        mock_session.get.return_value = mock_res
+
+        job = AutoHDRDownloadJob(session=mock_session)
+
+        with patch.object(job, "_step_get_processed_urls", return_value=[{"filename": "a.jpg", "url": "http://img.jpg"}]), \
+             patch.object(job, "_step_download", return_value=True):
+            res = job.execute(context)
+            assert res.status == "completed"
+            assert res.remote_job_id == "12345"
+            print("  -> PASS: AutoHDRDownloadJob tải ảnh photoshoot thành công không cần file nguồn.")
+
+
+def test_autoenhance_upload_presigned_retry_and_backoff():
+    print("[TEST] 14. Kiểm thử Autoenhance upload đa luồng, retry khi gặp 429 và S3 lỗi...")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_p = Path(temp_dir)
+        img1 = temp_p / "p1.jpg"
+        img2 = temp_p / "p2.jpg"
+        img1.write_bytes(b"content_1")
+        img2.write_bytes(b"content_2")
+        out_dir = temp_p / "out"
+
+        mock_sess = MagicMock()
+        call_counts = {"p1.jpg": 0, "p2.jpg": 0}
+
+        def mock_post(url, **kwargs):
+            resp = MagicMock()
+            if "/orders/" in url and not url.endswith("/process"):
+                resp.status_code = 200
+                resp.json.return_value = {"order_id": "ord_retry_test"}
+                return resp
+            if "/images/" in url:
+                payload = kwargs.get("json", {})
+                img_name = payload.get("image_name")
+                call_counts[img_name] = call_counts.get(img_name, 0) + 1
+                # Giả lập p1 gặp 429 ở lần đầu tiên, lần 2 mới thành công
+                if img_name == "p1.jpg" and call_counts["p1.jpg"] == 1:
+                    resp.status_code = 429
+                    resp.headers = {"Retry-After": "0"}
+                    resp.text = "Rate limited"
+                    return resp
+                resp.status_code = 200
+                resp.json.return_value = {"s3PutObjectUrl": f"https://s3.mock/{img_name}", "headers": {}}
+                return resp
+            resp.status_code = 200
+            return resp
+
+        mock_sess.post.side_effect = mock_post
+
+        import requests
+        put_counts = {}
+        original_put = requests.put
+
+        def fake_put(url, **kwargs):
+            put_counts[url] = put_counts.get(url, 0) + 1
+            resp = MagicMock()
+            # Giả lập p2 bị lỗi 500 ở lần upload đầu tiên, lần 2 mới thành công
+            if "p2.jpg" in url and put_counts[url] == 1:
+                resp.status_code = 500
+                resp.text = "Internal S3 error"
+                return resp
+            resp.status_code = 200
+            return resp
+
+        context = ExecutionContext(
+            job_id="ae_retry_job",
+            file_paths=[str(img1), str(img2)],
+            output_dir=str(out_dir),
+            credentials={"api_key": "dummy_key"},
+        )
+        job = AutoenhanceJob(session=mock_sess, max_upload_workers=2)
+        context.ready_files = [img1, img2]
+
+        try:
+            requests.put = fake_put
+            with patch("time.sleep", return_value=None):
+                ok = job._step_upload_files(context, {"x-api-key": "dummy_key"}, "ord_retry_test")
+            assert ok is True
+            assert call_counts["p1.jpg"] == 2, f"p1.jpg should be called 2 times (retried after 429), got {call_counts['p1.jpg']}"
+            assert put_counts["https://s3.mock/p2.jpg"] == 2, f"p2.jpg S3 PUT should be called 2 times (retried after 500), got {put_counts.get('https://s3.mock/p2.jpg')}"
+            print("  -> PASS: Đa luồng lấy link & upload S3 tự động retry thành công khi gặp 429 và 500.")
+        finally:
+            requests.put = original_put
+
+
 if __name__ == "__main__":
     test_registry_auto_registration()
     test_autohdr_job_missing_auth()
@@ -677,7 +785,9 @@ if __name__ == "__main__":
     test_autoenhance_trigger_process_and_preview_false_download()
     test_autoenhance_smart_resume_skips_to_download()
     test_autohdr_smart_resume_skips_to_download()
+    test_autohdr_download_job()
     test_autoenhance_anti_collision_duplicate_names()
     test_autohdr_anti_collision_duplicate_names()
     test_autoenhance_download_job_from_order_id()
-    print("\n✅ TOÀN BỘ 13 BÀI TEST TÍCH HỢP JOBS ĐỀU ĐẠT 100%!")
+    test_autoenhance_upload_presigned_retry_and_backoff()
+    print("\n✅ TOÀN BỘ 14 BÀI TEST TÍCH HỢP JOBS ĐỀU ĐẠT 100%!")

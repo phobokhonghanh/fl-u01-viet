@@ -1,10 +1,6 @@
 """
-Accounts Dialog — Modal Quản lý Tài khoản (Cookie AutoHDR & API Key Autoenhance).
-Cho phép:
-1. Xem danh sách tài khoản đã lưu kèm trạng thái active/inactive.
-2. Chuyển đổi tài khoản (switch account) 1-click.
-3. Xóa tài khoản (delete account) khỏi hệ thống.
-4. Thêm tài khoản mới (nhập cookie / nạp file / nhập API key) kèm xác thực ngầm.
+Tab Quản lý Account — Quản lý Cookie AutoHDR và API Key Autoenhance.
+Được nhúng vào SettingsDialog.
 """
 import os
 import json
@@ -23,55 +19,32 @@ from libs.auth import (
 )
 
 
-class AccountsDialog(ctk.CTkToplevel):
+class AccountsTabFrame(ctk.CTkFrame):
     def __init__(
         self,
         master,
         initial_engine: str = "autohdr",
         on_change_callback: Optional[Callable[[str, Optional[BaseSessionRecord]], None]] = None,
+        **kwargs
     ):
-        super().__init__(master)
-        self.title("Quản Lý Tài Khoản & API Key")
-        self.geometry("620x560")
-        self.resizable(False, False)
-        self.transient(master)
-        self.grab_set()
-
+        super().__init__(master, fg_color="transparent", **kwargs)
         self.initial_engine = initial_engine.lower()
         self.on_change_callback = on_change_callback
 
         self._build_ui()
-        self.center_window()
-
-    def center_window(self):
-        self.update_idletasks()
-        width = self.winfo_width()
-        height = self.winfo_height()
-        x = (self.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.winfo_screenheight() // 2) - (height // 2)
-        self.geometry(f"{width}x{height}+{x}+{y}")
 
     def _build_ui(self):
-        main_frame = ctk.CTkFrame(self, fg_color="transparent")
-        main_frame.pack(fill="both", expand=True, padx=16, pady=12)
-
-        # Header Title
-        title_row = ctk.CTkFrame(main_frame, fg_color="transparent")
-        title_row.pack(fill="x", pady=(0, 8))
-        ctk.CTkLabel(
-            title_row,
-            text="👥 Quản Lý Tài Khoản",
-            font=("Arial", 18, "bold")
-        ).pack(side="left")
+        container = ctk.CTkFrame(self, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=8, pady=4)
 
         # Tabview (AutoHDR vs Autoenhance)
-        self.tabview = ctk.CTkTabview(main_frame, height=440)
-        self.tabview.pack(fill="both", expand=True, pady=(0, 10))
+        self.tabview = ctk.CTkTabview(container, height=440)
+        self.tabview.pack(fill="both", expand=True)
 
         self.tab_autohdr = self.tabview.add("AutoHDR (Cookie)")
         self.tab_autoenhance = self.tabview.add("Autoenhance (API Key)")
 
-        # Chọn tab mặc định theo engine hiện tại
+        # Chọn tab mặc định theo engine
         if self.initial_engine == "autoenhance":
             self.tabview.set("Autoenhance (API Key)")
         else:
@@ -80,33 +53,18 @@ class AccountsDialog(ctk.CTkToplevel):
         self._build_autohdr_tab()
         self._build_autoenhance_tab()
 
-        # Bottom Close Button
-        btn_row = ctk.CTkFrame(main_frame, fg_color="transparent")
-        btn_row.pack(fill="x")
-        ctk.CTkButton(
-            btn_row,
-            text="Đóng",
-            width=90,
-            height=32,
-            font=("Arial", 12),
-            fg_color="#374151",
-            hover_color="#1F2937",
-            command=self.destroy,
-        ).pack(side="right")
-
     # =========================================================================
-    # TAB 1: AUTOHDR (COOKIE / EMAIL)
+    # 1. TAB AUTOHDR (COOKIE / EMAIL)
     # =========================================================================
     def _build_autohdr_tab(self):
-        # 1. Danh sách tài khoản (Scrollable)
-        self.hdr_list_frame = ctk.CTkScrollableFrame(self.tab_autohdr, height=250)
-        self.hdr_list_frame.pack(fill="both", expand=True, padx=6, pady=(6, 8))
+        self.hdr_list_frame = ctk.CTkScrollableFrame(self.tab_autohdr, height=240)
+        self.hdr_list_frame.pack(fill="both", expand=True, padx=4, pady=(4, 8))
 
-        # 2. Form thêm Cookie mới
+        # Form thêm Cookie mới
         add_frame = ctk.CTkFrame(self.tab_autohdr, fg_color=("gray85", "gray20"), corner_radius=6)
-        add_frame.pack(fill="x", padx=6, pady=(0, 4))
+        add_frame.pack(fill="x", padx=4, pady=(0, 4))
 
-        ctk.CTkLabel(add_frame, text="➕ Thêm Cookie mới:", font=("Arial", 13, "bold")).pack(anchor="w", padx=10, pady=(6, 2))
+        ctk.CTkLabel(add_frame, text="➕ Thêm Cookie mới:", font=("Arial", 12, "bold")).pack(anchor="w", padx=10, pady=(6, 2))
 
         entry_row = ctk.CTkFrame(add_frame, fg_color="transparent")
         entry_row.pack(fill="x", padx=10, pady=(0, 4))
@@ -202,7 +160,7 @@ class AccountsDialog(ctk.CTkToplevel):
             self.on_change_callback("autohdr", record)
 
     def _delete_autohdr(self, email: str):
-        if not messagebox.askyesno("Xác nhận", f"Bạn có chắc muốn xóa tài khoản {email}?"):
+        if not messagebox.askyesno("Xác nhận", f"Bạn có chắc muốn xóa tài khoản {email}?", parent=self):
             return
         delete_account(email, "autohdr")
         active = get_active_session("autohdr")
@@ -268,18 +226,17 @@ class AccountsDialog(ctk.CTkToplevel):
             self.on_change_callback("autohdr", record)
 
     # =========================================================================
-    # TAB 2: AUTOENHANCE (API KEY)
+    # 2. TAB AUTOENHANCE (API KEY)
     # =========================================================================
     def _build_autoenhance_tab(self):
-        # 1. Danh sách API Key (Scrollable)
-        self.ae_list_frame = ctk.CTkScrollableFrame(self.tab_autoenhance, height=250)
-        self.ae_list_frame.pack(fill="both", expand=True, padx=6, pady=(6, 8))
+        self.ae_list_frame = ctk.CTkScrollableFrame(self.tab_autoenhance, height=240)
+        self.ae_list_frame.pack(fill="both", expand=True, padx=4, pady=(4, 8))
 
-        # 2. Form thêm API Key mới
+        # Form thêm API Key mới
         add_frame = ctk.CTkFrame(self.tab_autoenhance, fg_color=("gray85", "gray20"), corner_radius=6)
-        add_frame.pack(fill="x", padx=6, pady=(0, 4))
+        add_frame.pack(fill="x", padx=4, pady=(0, 4))
 
-        ctk.CTkLabel(add_frame, text="➕ Thêm API Key mới:", font=("Arial", 13, "bold")).pack(anchor="w", padx=10, pady=(6, 2))
+        ctk.CTkLabel(add_frame, text="➕ Thêm API Key mới:", font=("Arial", 12, "bold")).pack(anchor="w", padx=10, pady=(6, 2))
 
         entry_row = ctk.CTkFrame(add_frame, fg_color="transparent")
         entry_row.pack(fill="x", padx=10, pady=(0, 4))
@@ -329,7 +286,6 @@ class AccountsDialog(ctk.CTkToplevel):
             badge_color = "#22C55E" if acc.is_active else "gray"
             ctk.CTkLabel(left_box, text=badge_text, font=("Arial", 11, "bold"), text_color=badge_color).pack(anchor="w")
 
-            # Chỉ hiển thị masked key theo đúng yêu cầu (không có tiền tố "Key Chính" hay "Default Key")
             ctk.CTkLabel(left_box, text=acc.display_name, font=("Arial", 13, "bold")).pack(anchor="w")
 
             right_box = ctk.CTkFrame(card, fg_color="transparent")
@@ -364,7 +320,7 @@ class AccountsDialog(ctk.CTkToplevel):
 
     def _delete_autoenhance(self, api_key: str):
         masked = api_key[:8] + "..." + api_key[-4:] if len(api_key) > 12 else api_key
-        if not messagebox.askyesno("Xác nhận", f"Bạn có chắc muốn xóa API Key {masked}?"):
+        if not messagebox.askyesno("Xác nhận", f"Bạn có chắc muốn xóa API Key {masked}?", parent=self):
             return
         delete_account(api_key, "autoenhance")
         active = get_active_session("autoenhance")
