@@ -414,7 +414,7 @@ def test_autoenhance_trigger_process_and_preview_false_download():
         assert captured_process_payload.get("cloud_type") == "LOW_CLOUD"  # Enum OpenAPI
         assert captured_process_payload.get("perspective_correction") is True
         assert captured_process_payload.get("perspective_correction_mode") == "PRESERVE_CONTENT"
-        assert captured_process_payload.get("number_of_brackets_per_image") == "1"
+        assert captured_process_payload.get("number_of_brackets_per_image") == 1
 
         # 4. Kiểm tra URL tải ảnh có preview=false (không có watermark)
         captured_dl_url = ""
@@ -774,6 +774,122 @@ def test_autoenhance_upload_presigned_retry_and_backoff():
             requests.put = original_put
 
 
+def test_autoenhance_packet_grouping_for_brackets():
+    print("[TEST] 15. Kiểm thử Autoenhance push theo packet (Explicit Grouping) cho HDR brackets...")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_p = Path(temp_dir)
+        files = []
+        # Tạo 10 file DSC09320 -> DSC09329
+        for i in range(10):
+            f = temp_p / f"DSC0932{i}.jpg"
+            f.write_bytes(f"dummy_{i}".encode("utf-8"))
+            files.append(f)
+
+        mock_sess = MagicMock()
+        registered_brackets = []
+        captured_process_payload = {}
+
+        def mock_post(url, json=None, **kwargs):
+            nonlocal captured_process_payload
+            resp = MagicMock()
+            resp.status_code = 200
+            if "/brackets/" in url:
+                registered_brackets.append(json)
+                b_name = json.get("name")
+                resp.json.return_value = {
+                    "bracket_id": f"bid_{b_name}",
+                    "upload_url": f"https://s3.mock/{b_name}",
+                }
+            elif "/process" in url:
+                captured_process_payload = json or {}
+                resp.json.return_value = {"success": "merging order"}
+            return resp
+
+        mock_sess.post.side_effect = mock_post
+
+        context = ExecutionContext(
+            job_id="ae_bracket_test",
+            file_paths=[str(f) for f in files],
+            output_dir=str(temp_p / "out"),
+            credentials={"api_key": "dummy_key"},
+            preferences={
+                "number_of_brackets_per_image": "5",
+                "cloud_type": "WHISPY_CLOUD",
+            },
+        )
+        context.ready_files = files
+        job = AutoenhanceJob(session=mock_sess)
+        headers = {"x-api-key": "dummy_key"}
+
+        import requests
+        orig_put = requests.put
+        try:
+            requests.put = MagicMock(return_value=MagicMock(status_code=200))
+            # 1. Chạy upload files
+            ok_up = job._step_upload_files(context, headers, "order_brackets_01")
+            assert ok_up is True
+            # Kiểm tra 10 ảnh đều gọi vào /brackets/ với name
+            assert len(registered_brackets) == 10
+            # Kiểm tra bracket_packets được chia thành 2 packet, mỗi packet 5 ảnh
+            packets = context.extra_data.get("bracket_packets", [])
+            assert len(packets) == 2
+            assert len(packets[0]) == 5
+            assert len(packets[1]) == 5
+            assert packets[0] == [f"bid_DSC0932{i}.jpg" for i in range(5)]
+            assert packets[1] == [f"bid_DSC0932{i}.jpg" for i in range(5, 10)]
+
+            # 2. Chạy trigger process
+            ok_proc = job._step_trigger_process(context, headers, "order_brackets_01")
+            assert ok_proc is True
+            # Kiểm tra payload chứa mảng images theo packet và không chứa number_of_brackets_per_image
+            assert "images" in captured_process_payload
+            assert len(captured_process_payload["images"]) == 2
+            assert captured_process_payload["images"][0]["bracket_ids"] == packets[0]
+            assert captured_process_payload["images"][1]["bracket_ids"] == packets[1]
+            assert "number_of_brackets_per_image" not in captured_process_payload
+            print("  -> PASS: Đã gom chính xác 10 file thành 2 packet (mỗi packet 5 bracket_id), payload đúng chuẩn Explicit Grouping.")
+        finally:
+            requests.put = orig_put
+
+
+def test_filter_final_processed_images_logic():
+    print("[TEST] 16. Kiểm thử filter_final_processed_images lọc đúng ảnh thành phẩm cuối cùng...")
+    from libs.utils.autoenhance import filter_final_processed_images
+
+    # 1. Tra cứu theo brackets
+    mock_sess = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "brackets": [
+            {"bracket_id": "b1", "image_id": "img_hdr_1"},
+            {"bracket_id": "b2", "image_id": "img_hdr_1"},
+            {"bracket_id": "b3", "image_id": "img_hdr_2"},
+            {"bracket_id": "b4", "image_id": "img_hdr_2"},
+        ]
+    }
+    mock_sess.get.return_value = mock_resp
+
+    test_imgs = [
+        {"image_id": "raw_1", "image_name": "raw1.jpg"},
+        {"image_id": "raw_2", "image_name": "raw2.jpg"},
+        {"image_id": "img_hdr_1", "image_name": "final1.jpg", "metadata": {"Manually Grouped": False}},
+        {"image_id": "img_hdr_2", "image_name": "final2.jpg", "metadata": {"Manually Grouped": False}},
+    ]
+
+    res = filter_final_processed_images("order_123", test_imgs, {"x-api-key": "k"}, session=mock_sess)
+    assert len(res) == 2
+    res_ids = {img["image_id"] for img in res}
+    assert res_ids == {"img_hdr_1", "img_hdr_2"}
+
+    # 2. Fallback Heuristic: Nếu API brackets lỗi, dựa vào 'Manually Grouped'
+    mock_sess.get.side_effect = Exception("Network error")
+    res_fallback = filter_final_processed_images("order_123", test_imgs, {"x-api-key": "k"}, session=mock_sess)
+    assert len(res_fallback) == 2
+    assert {img["image_id"] for img in res_fallback} == {"img_hdr_1", "img_hdr_2"}
+    print("  -> PASS: filter_final_processed_images lọc chính xác 2 ảnh HDR thành phẩm, loại bỏ toàn bộ ảnh nháp thô.")
+
+
 if __name__ == "__main__":
     test_registry_auto_registration()
     test_autohdr_job_missing_auth()
@@ -790,4 +906,6 @@ if __name__ == "__main__":
     test_autohdr_anti_collision_duplicate_names()
     test_autoenhance_download_job_from_order_id()
     test_autoenhance_upload_presigned_retry_and_backoff()
-    print("\n✅ TOÀN BỘ 14 BÀI TEST TÍCH HỢP JOBS ĐỀU ĐẠT 100%!")
+    test_autoenhance_packet_grouping_for_brackets()
+    test_filter_final_processed_images_logic()
+    print("\n✅ TOÀN BỘ 16 BÀI TEST TÍCH HỢP JOBS ĐỀU ĐẠT 100%!")

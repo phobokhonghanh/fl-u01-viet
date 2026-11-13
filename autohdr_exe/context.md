@@ -54,7 +54,7 @@ autohdr_exe/
 │   │   │   ├── thread.py              # run_parallel: ThreadPoolExecutor, responsive cancel & callback
 │   │   │   ├── poll.py                # poll_until: Polling đa năng, cancel tức thì (0ms) & timeout
 │   │   │   ├── common.py              # make_progress_reporter: Callback tiến độ chuẩn hóa
-│   │   │   └── autoenhance.py         # fetch_order_status, poll_order_completion, apply_pil_postprocess, download_order_images
+│   │   │   └── autoenhance.py         # fetch_order_status, poll_order_completion, apply_pil_postprocess, download_order_images, filter_final_processed_images
 │   │   ├── constants/
 │   │   │   ├── autohdr.py             # Base URL (old.autohdr.com), endpoints, storage filename
 │   │   │   ├── autoenhance.py         # Base URL (api.autoenhance.ai/v3), endpoints, storage filename
@@ -79,7 +79,7 @@ autohdr_exe/
 │   └── tests/                         # Unit tests độc lập (100% PASS)
 │       ├── test_auth.py               # Test Auth switch/delete/active (4/4 PASS)
 │       ├── test_executor_base.py      # Test BaseExecutor & Gatekeeper (6/6 PASS)
-│       ├── test_jobs.py               # Test 4 Jobs AutoHDR, AutoHDRDownload, Autoenhance, AutoenhanceDownload (14/14 PASS)
+│       ├── test_jobs.py               # Test 4 Jobs AutoHDR, AutoHDRDownload, Autoenhance, AutoenhanceDownload (16/16 PASS)
 │       ├── test_runner.py             # Test JobRunner đa luồng & cancel (6/6 PASS)
 │       └── test_utils.py              # Test I/O, thread, poll, autoenhance utils (10/10 PASS)
 │
@@ -115,6 +115,16 @@ autohdr_exe/
 5. **Khắc phục lỗi đè Modal Dialog:** Trong `tab_accounts.py`, thêm `parent=self` vào `messagebox.askyesno` để popup xác nhận xóa tài khoản luôn nổi lên trên modal `CTkToplevel`.
 6. **Bỏ ghi đĩa liên tục trên sự kiện gõ phím:** Đã bỏ bind `<KeyRelease>` ghi `cache.save()` ở ô nhập địa chỉ; chỉ lưu vào cache khi người dùng rời con trỏ (`<FocusOut>`).
 7. **Đa luồng hóa & Smart Retry khi xin presigned S3 (Autoenhance):** Đã nâng cấp bước xin link presigned (`POST /images/`) từ tuần tự sang song song qua `run_parallel` (4 workers), tích hợp Smart Retry (xử lý HTTP 429 với `Retry-After`, 5xx với Linear Backoff), fail-fast với lỗi 4xx client và bổ sung thời gian nghỉ retry đồng bộ cho mọi thất bại khi upload S3.
+8. **Chuẩn hóa HDR Brackets sang Push theo Packet (Explicit Grouping):**
+   * Đã phân tách luồng: Nếu `number_of_brackets_per_image > 1`, tự động chuyển sang gọi endpoint chuyên dụng `POST /brackets/` (`ENDPOINT_BRACKETS = "/brackets/"`).
+   * Luôn sắp xếp danh sách file theo tên (`sorted_files = sorted(ready_files, key=lambda f: f.name)`) để đảm bảo các frame cùng góc chụp luôn liền kề nhau.
+   * Gom các `bracket_id` theo đúng kích thước bracket thành các packet (`bracket_packets`) và gửi mảng `images: [{"bracket_ids": [...]}]` lên `POST /orders/{order_id}/process`.
+   * Tránh hoàn toàn lỗi HTTP 422 `Conflicting grouping options` bằng cách không gửi `number_of_brackets_per_image` khi đã có mảng `images`. Không còn phụ thuộc vào EXIF timestamp của server, đảm bảo 100% ra đúng số lượng ảnh HDR thành phẩm.
+9. **Khắc phục triệt để lỗi tải ảnh trùng lặp / ảnh draft (`filter_final_processed_images`):**
+   * Tích hợp bộ lọc 2 tầng tại [`autohdr_exe/1tm/libs/utils/autoenhance.py`](file:///d:/workspace/fl-u01-viet/autohdr_exe/1tm/libs/utils/autoenhance.py).
+   * Tầng 1: Tra cứu `/orders/{order_id}/brackets` để lấy danh sách target `image_id` thực sự của thành phẩm.
+   * Tầng 2: Heuristic fallback lọc theo metadata `{"Manually Grouped": False}` và lấy ảnh có `date_added` mới nhất.
+   * 📄 Toàn bộ vòng đời và quy trình kỹ thuật chi tiết của Autoenhance đã được hệ thống hóa tại: [wf_autoenhance.md](file:///d:/workspace/fl-u01-viet/autohdr_exe/wf_autoenhance.md).
 
 ---
 

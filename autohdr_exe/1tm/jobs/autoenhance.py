@@ -22,6 +22,7 @@ from libs.constants.autoenhance import (
     DEFAULT_POLL_INTERVAL,
     DEFAULT_TIMEOUT,
     DOWNLOAD_CHUNK_SIZE,
+    ENDPOINT_BRACKETS,
     ENDPOINT_IMAGES,
     ENDPOINT_ORDER_DETAIL,
     ENDPOINT_ORDERS,
@@ -185,6 +186,8 @@ class AutoenhanceJob(BaseExecutor):
 
         try:
             url = f"{API_BASE}{ENDPOINT_ORDERS}"
+            # PLUS
+            time.sleep(2)  # Nghỉ 2 - 3s chờ S3 ổn định hoàn tất 100%
             res = self.session.post(url, json=payload, headers=headers, timeout=DEFAULT_TIMEOUT)
             if res.status_code not in (200, 201):
                 context.error_message = f"Tạo Order thất bại (HTTP {res.status_code}): {res.text}"
@@ -205,23 +208,41 @@ class AutoenhanceJob(BaseExecutor):
     def _step_upload_files(
         self, context: ExecutionContext, headers: Dict[str, str], order_id: str
     ) -> bool:
-        """Bước 2: Xin link S3 (POST /images/) đa luồng và tải ảnh lên AWS S3 đa luồng."""
+        """Bước 2: Xin link S3 (POST /brackets/ hoặc POST /images/) đa luồng và tải ảnh lên AWS S3 đa luồng."""
         if context.is_cancelled():
             return False
 
-        total_files = len(context.ready_files)
+        # Luôn sắp xếp file theo tên (DSC001, DSC002...) để đảm bảo các frame HDR cùng một cảnh chụp liền kề nhau
+        sorted_files = sorted(context.ready_files, key=lambda f: f.name)
+        total_files = len(sorted_files)
         context.set_step("upload_prepare", f"Đang chuẩn bị link upload cho {total_files} ảnh...", progress_pct=22)
+
+        # Kiểm tra chế độ Bracket: Nếu > 1 thì dùng Endpoint /brackets/ chuyên dụng cho HDR
+        brackets_val = context.preferences.get("number_of_brackets_per_image")
+        bracket_int = 0
+        if brackets_val is not None:
+            try:
+                bracket_int = int(brackets_val)
+            except (ValueError, TypeError):
+                bracket_int = 0
+        is_bracket_mode = bracket_int > 1
 
         # 1. Xin link presigned S3 song song đa luồng qua run_parallel (có Smart Retry & Backoff)
         def _fetch_presigned_one(file_path: Path) -> Dict[str, Any]:
-            img_url = f"{API_BASE}{ENDPOINT_IMAGES}"
-            payload = {"order_id": order_id, "image_name": file_path.name}
+            if is_bracket_mode:
+                img_url = f"{API_BASE}{ENDPOINT_BRACKETS}"
+                payload = {"order_id": order_id, "name": file_path.name}
+            else:
+                img_url = f"{API_BASE}{ENDPOINT_IMAGES}"
+                payload = {"order_id": order_id, "image_name": file_path.name}
             last_err = ""
 
             for attempt in range(3):
                 if context.is_cancelled():
                     raise RuntimeError("Tác vụ bị dừng bởi người dùng.")
                 try:
+                    # PLUS
+                    time.sleep(1)  # Nghỉ 0.5s giữa các lần xin link
                     res = self.session.post(img_url, json=payload, headers=headers, timeout=DEFAULT_TIMEOUT)
                     if res.status_code in (200, 201):
                         return res.json()
@@ -247,7 +268,7 @@ class AutoenhanceJob(BaseExecutor):
             raise IOError(f"Lỗi xin link upload cho '{file_path.name}': {last_err}")
 
         batch_presigned = run_parallel(
-            items=context.ready_files,
+            items=sorted_files,
             worker_fn=_fetch_presigned_one,
             max_workers=self.max_upload_workers,
             stop_event=context.stop_event,
@@ -265,24 +286,45 @@ class AutoenhanceJob(BaseExecutor):
                 context.error_message = "Không lấy đủ link upload từ Autoenhance."
             return False
 
-        upload_tasks: List[Tuple[Path, Dict[str, Any]]] = batch_presigned.succeeded
+        # Khôi phục thứ tự chuẩn ban đầu từ sorted_files (tránh xáo trộn do đa luồng as_completed)
+        res_by_path = {f_path: res for f_path, res in batch_presigned.succeeded}
+        upload_tasks: List[Tuple[Path, Dict[str, Any]]] = [
+            (f, res_by_path[f]) for f in sorted_files if f in res_by_path
+        ]
+
+        # Ở chế độ bracket, lưu danh sách packet (mỗi packet đúng bracket_int ảnh) vào context.extra_data
+        if is_bracket_mode:
+            ordered_bids = [
+                res_by_path[f].get("bracket_id")
+                for f in sorted_files
+                if f in res_by_path and res_by_path[f].get("bracket_id")
+            ]
+            packets = [
+                ordered_bids[i:i + bracket_int]
+                for i in range(0, len(ordered_bids), bracket_int)
+            ]
+            context.extra_data["bracket_packets"] = packets
+            context.log("INFO", f"Đã chia {len(ordered_bids)} ảnh bracket thành {len(packets)} packet (kích thước {bracket_int}).")
 
         # 2. Upload song song đa luồng lên AWS S3 qua run_parallel (có Retry & Delay)
         context.set_step("upload", f"Bắt đầu tải {total_files} ảnh lên S3...", progress_pct=28)
 
         def _upload_one(task: Tuple[Path, Dict[str, Any]]) -> bool:
             f_path, s3_info = task
-            url = s3_info.get("s3PutObjectUrl") or s3_info.get("url")
+            url = s3_info.get("upload_url") or s3_info.get("s3PutObjectUrl") or s3_info.get("url")
             if not url:
                 raise ValueError(f"Thiếu S3 URL cho file {f_path.name}")
 
             raw_headers = s3_info.get("headers", {})
             req_headers = {str(k): str(v) for k, v in raw_headers.items() if str(k).lower() != "host"}
             if "content-type" not in [k.lower() for k in req_headers]:
-                mime = s3_info.get("metadata", {}).get("MIMEType")
-                if not mime:
-                    mime = "image/png" if f_path.suffix.lower() == ".png" else "image/jpeg"
-                req_headers["Content-Type"] = mime
+                if is_bracket_mode:
+                    req_headers["Content-Type"] = "application/octet-stream"
+                else:
+                    mime = s3_info.get("metadata", {}).get("MIMEType")
+                    if not mime:
+                        mime = "image/png" if f_path.suffix.lower() == ".png" else "image/jpeg"
+                    req_headers["Content-Type"] = mime
 
             last_err = ""
             for attempt in range(3):
@@ -351,7 +393,12 @@ class AutoenhanceJob(BaseExecutor):
 
         # 5. Brackets
         brackets_val = prefs.get("number_of_brackets_per_image")
-        bracket_str = str(brackets_val) if brackets_val is not None else None
+        bracket_int: Optional[int] = None
+        if brackets_val is not None:
+            try:
+                bracket_int = int(brackets_val)
+            except (ValueError, TypeError):
+                bracket_int = 0
 
         payload: Dict[str, Any] = {
             "ai_version": prefs.get("ai_version", "latest"),
@@ -362,7 +409,8 @@ class AutoenhanceJob(BaseExecutor):
             "perspective_correction_mode": persp_mode,
             "privacy": bool(prefs.get("privacy", False)),
             "lens_correction": bool(prefs.get("lens_correction", False)),
-            "window_pull_type": win_type,
+            "window_pull": bool(prefs.get("window_pull", False)),
+            "window_pull_type": win_type or "ONLY_WINDOWS",
             "contrast_boost": prefs.get("contrast_boost", None),
             "saturation_level": prefs.get("saturation_level", None),
             "upscale": bool(prefs.get("upscale", False)),
@@ -373,10 +421,17 @@ class AutoenhanceJob(BaseExecutor):
                 "environment": "AS_SHOT",
                 "grass": prefs.get("restage.grass", "AS_SHOT"),
             },
-            "preset_id": preset_id,
-            "preset_version": preset_version,
-            "number_of_brackets_per_image": bracket_str,
         }
+        if preset_id is not None:
+            payload["preset_id"] = preset_id
+            payload["preset_version"] = preset_version
+
+        # 5. Brackets: Nếu có bracket_packets thì push theo packet (Explicit Grouping)
+        packets = context.extra_data.get("bracket_packets", [])
+        if packets:
+            payload["images"] = [{"bracket_ids": pkt} for pkt in packets]
+        elif bracket_int is not None and bracket_int > 0:
+            payload["number_of_brackets_per_image"] = bracket_int
 
         try:
             url = f"{API_BASE}{ENDPOINT_PROCESS.format(order_id=order_id)}"
