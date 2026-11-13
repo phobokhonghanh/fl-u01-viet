@@ -1,5 +1,5 @@
 """
-AutoHDR Client EXE v6 — Entry Point.
+AutoHDR Client EXE v6.1 — Entry Point.
 
 Local pipeline execution: all AutoHDR API calls (Steps 1-7) run directly
 from this EXE. Cloudflare server is only used for key validation.
@@ -37,9 +37,23 @@ if "--smoke-test" in sys.argv:
     from ui.app import App
     from ui.screen_main import ScreenMain
     from ui.screen_key import ScreenKey
-    from ui.accounts_dialog import AccountsDialog
     from ui.settings_dialog import SettingsDialog
-    from jobs import JobRunner, AutoHDRJob, AutoenhanceJob, AutoenhanceDownloadJob
+    from ui.tab_storage import StorageTabFrame
+    from ui.tab_accounts import AccountsTabFrame
+    from ui.components import (
+        ConfigAutoHDRFrame,
+        ConfigAutoenhanceFrame,
+        DropZoneFrame,
+        JobListFrame,
+        LogViewerFrame,
+    )
+    from jobs import (
+        JobRunner,
+        AutoHDRJob,
+        AutoHDRDownloadJob,
+        AutoenhanceJob,
+        AutoenhanceDownloadJob,
+    )
     from libs.auth import get_active_session, authenticate
     from libs.executor import ExecutorRegistry
     from PIL import Image

@@ -73,6 +73,8 @@ class BaseExecutor(ABC):
     Chỉ có duy nhất phương thức 'transform' là abstract để bảo đảm tính tự do tối đa cho từng Provider.
     """
 
+    max_upload_files: int = 120
+
     def pre_transform(self, context: ExecutionContext) -> bool:
         """
         Giai đoạn chuẩn bị (Base implementation):
@@ -147,6 +149,15 @@ class BaseExecutor(ABC):
         out_p = Path(context.output_dir).resolve()
         if not out_p.is_dir():
             context.error_message = f"Lỗi hậu kiểm: Thư mục đầu ra không tồn tại: {context.output_dir}"
+            context.log("ERROR", context.error_message)
+            return False
+
+        # 4. Giới hạn số lượng file tối đa theo Provider
+        if len(context.ready_files) > self.max_upload_files:
+            context.error_message = (
+                f"Lỗi hậu kiểm: Số lượng file ({len(context.ready_files)}) vượt quá giới hạn "
+                f"cho phép tối đa của {self.__class__.__name__} ({self.max_upload_files} files)."
+            )
             context.log("ERROR", context.error_message)
             return False
 

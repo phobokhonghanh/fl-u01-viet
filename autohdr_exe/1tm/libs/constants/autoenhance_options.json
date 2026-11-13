@@ -1,0 +1,143 @@
+[
+  {
+    "field": "enhancement_style",
+    "label": "Enhancement",
+    "description": "Phong cách tăng cường ảnh",
+    "options": [
+      {"label": "dynamic", "value": "dynamic"},
+      {"label": "natural", "value": "natural"}
+    ]
+  },
+  {
+    "field": "cloud_type",
+    "label": "Cloud",
+    "description": "Kiểu mây thay thế bầu trời",
+    "dependence": {
+      "target": "sky_replacement",
+      "rule": "if_null_false_else_true"
+    },
+    "options": [
+      {"label": "off", "value": null},
+      {"label": "clear", "value": "CLEAR"},
+      {"label": "low cloud", "value": "LOW_CLOUD"},
+      {"label": "high cloud", "value": "HIGH_CLOUD"},
+      {"label": "dusk cloud", "value": "DUSK_CLOUD"},
+      {"label": "whispy cloud", "value": "WHISPY_CLOUD"}
+    ]
+  },
+  {
+    "field": "number_of_brackets_per_image",
+    "label": "Bracket",
+    "description": "Số lượng bracket chụp cho mỗi ảnh",
+    "options": [
+      {"label": "1", "value": "1"},
+      {"label": "2", "value": "2"},
+      {"label": "3", "value": "3"},
+      {"label": "4", "value": "4"},
+      {"label": "5", "value": "5"},
+      {"label": "6", "value": "6"},
+      {"label": "7", "value": "7"},
+      {"label": "8", "value": "8"},
+      {"label": "9", "value": "9"},
+      {"label": "10", "value": "10"}
+    ]
+  },
+  {
+    "field": "perspective_correction_mode",
+    "label": "Perspective Correction",
+    "description": "Chế độ cân chỉnh trục đứng và phối cảnh",
+    "dependence": {
+      "target": "perspective_correction",
+      "rule": "if_null_false_else_true"
+    },
+    "options": [
+      {"label": "off", "value": null},
+      {"label": "preserve content", "value": "PRESERVE_CONTENT"},
+      {"label": "prioritize perspective", "value": "PRIORITIZE_PERSPECTIVE"}
+    ]
+  },
+  {
+    "field": "privacy",
+    "label": "Auto Privacy",
+    "description": "Tự động che mờ thông tin cá nhân và nhạy cảm",
+    "options": [
+      {"label": "off", "value": false},
+      {"label": "on", "value": true}
+    ]
+  },
+  {
+    "field": "lens_correction",
+    "label": "Lens Correction",
+    "description": "Sửa méo quang học do góc rộng của ống kính",
+    "options": [
+      {"label": "off", "value": false},
+      {"label": "on", "value": true}
+    ]
+  },
+  {
+    "field": "window_pull_type",
+    "label": "Window Pull",
+    "description": "Khử chói lóa và cân bằng ánh sáng cửa sổ",
+    "dependence": {
+      "target": "window_pull",
+      "rule": "if_none_false_else_true"
+    },
+    "options": [
+      {"label": "off", "value": "NONE"},
+      {"label": "only windows", "value": "ONLY_WINDOWS"},
+      {"label": "windows_with_skies", "value": "WINDOWS_WITH_SKIES"}
+    ]
+  },
+  {
+    "field": "restage.tvs",
+    "label": "TV blackout",
+    "description": "Làm đen màn hình TV",
+    "options": [
+      {"label": "off", "value": "AS_SHOT"},
+      {"label": "black out", "value": "BLACK_OUT"}
+    ]
+  },
+  {
+    "field": "restage.fire_in_fireplaces",
+    "label": "Fire in Fireplaces",
+    "description": "Thắp lửa ấm cho lò sưởi",
+    "options": [
+      {"label": "off", "value": "AS_SHOT"},
+      {"label": "alight", "value": "ALIGHT"}
+    ]
+  },
+  {
+    "field": "restage.photographer",
+    "label": "Photographer removal",
+    "description": "Xóa bóng người chụp ảnh",
+    "options": [
+      {"label": "off", "value": "AS_SHOT"},
+      {"label": "remove", "value": "REMOVE"}
+    ]
+  },
+  {
+    "field": "restage.grass",
+    "label": "Grass",
+    "description": "Làm xanh tươi thảm cỏ ngoại thất",
+    "options": [
+      {"label": "off", "value": "AS_SHOT"},
+      {"label": "green", "value": "GREEN"}
+    ]
+  },
+  {
+    "field": "preset_id",
+    "label": "Preset",
+    "description": "Preset màu sắc Autoenhance",
+    "dependence": {
+      "target": "preset_version",
+      "rule": "if_not_null_1_else_null"
+    },
+    "options": [
+      {"label": "none", "value": null},
+      {"label": "vivid", "value": "d8a5ecac-202e-4d1f-8ed4-39669d4f81cb"},
+      {"label": "warm", "value": "c1824178-a113-43f3-a9b5-15caa91d93df"},
+      {"label": "natural", "value": "b02886eb-a8e8-4ffc-bcd4-e9c901dddb52"}
+    ]
+  }
+]
+

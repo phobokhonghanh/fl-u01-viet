@@ -29,6 +29,7 @@ from libs.constants.autoenhance import (
     ENHANCED_IMAGE_QUERY,
     MAX_API_WORKERS,
     MAX_DOWNLOAD_WORKERS,
+    MAX_UPLOAD_FILES,
     USER_AGENT,
 )
 from libs.executor.base import BaseExecutor, ExecutionContext
@@ -44,6 +45,8 @@ from libs.utils.autoenhance import (
 
 class AutoenhanceJob(BaseExecutor):
     """Executor chuyên trách xử lý job cho engine Autoenhance."""
+
+    max_upload_files: int = MAX_UPLOAD_FILES
 
     def __init__(
         self,
@@ -202,36 +205,71 @@ class AutoenhanceJob(BaseExecutor):
     def _step_upload_files(
         self, context: ExecutionContext, headers: Dict[str, str], order_id: str
     ) -> bool:
-        """Bước 2: Xin link S3 (POST /images/) và tải ảnh lên AWS S3 đa luồng."""
+        """Bước 2: Xin link S3 (POST /images/) đa luồng và tải ảnh lên AWS S3 đa luồng."""
         if context.is_cancelled():
             return False
 
         total_files = len(context.ready_files)
-        context.set_step("upload", f"Bắt đầu upload {total_files} ảnh lên Autoenhance S3...", progress_pct=25)
+        context.set_step("upload_prepare", f"Đang chuẩn bị link upload cho {total_files} ảnh...", progress_pct=22)
 
-        # 1. Lấy upload S3 info cho từng ảnh
-        upload_tasks: List[Tuple[Path, Dict[str, Any]]] = []
-        for f in context.ready_files:
-            if context.is_cancelled():
-                return False
-            try:
-                img_url = f"{API_BASE}{ENDPOINT_IMAGES}"
-                res = self.session.post(
-                    img_url,
-                    json={"order_id": order_id, "image_name": f.name},
-                    headers=headers,
-                    timeout=DEFAULT_TIMEOUT,
-                )
-                if res.status_code in (200, 201):
-                    upload_tasks.append((f, res.json()))
-                else:
-                    context.error_message = f"Không lấy được link upload cho {f.name}: {res.text}"
-                    return False
-            except Exception as exc:
-                context.error_message = f"Lỗi lấy thông tin upload {f.name}: {exc}"
-                return False
+        # 1. Xin link presigned S3 song song đa luồng qua run_parallel (có Smart Retry & Backoff)
+        def _fetch_presigned_one(file_path: Path) -> Dict[str, Any]:
+            img_url = f"{API_BASE}{ENDPOINT_IMAGES}"
+            payload = {"order_id": order_id, "image_name": file_path.name}
+            last_err = ""
 
-        # 2. Upload song song đa luồng qua run_parallel
+            for attempt in range(3):
+                if context.is_cancelled():
+                    raise RuntimeError("Tác vụ bị dừng bởi người dùng.")
+                try:
+                    res = self.session.post(img_url, json=payload, headers=headers, timeout=DEFAULT_TIMEOUT)
+                    if res.status_code in (200, 201):
+                        return res.json()
+
+                    # Xử lý Rate Limit (429) hoặc Lỗi Server tạm thời (5xx)
+                    if res.status_code == 429:
+                        wait_sec = int(res.headers.get("Retry-After", attempt + 2))
+                        last_err = f"HTTP 429 Rate limit, chờ {wait_sec}s"
+                        time.sleep(wait_sec)
+                        continue
+                    elif res.status_code >= 500:
+                        last_err = f"HTTP {res.status_code}: {res.text[:150]}"
+                    else:
+                        # Lỗi client (400, 401, 403, 404): Dừng ngay lập tức, không retry
+                        raise ValueError(f"HTTP {res.status_code}: {res.text[:150]}")
+
+                except (requests.RequestException, IOError) as exc:
+                    last_err = str(exc)
+
+                if attempt < 2:
+                    time.sleep(attempt + 1)
+
+            raise IOError(f"Lỗi xin link upload cho '{file_path.name}': {last_err}")
+
+        batch_presigned = run_parallel(
+            items=context.ready_files,
+            worker_fn=_fetch_presigned_one,
+            max_workers=self.max_upload_workers,
+            stop_event=context.stop_event,
+            on_progress=make_progress_reporter(
+                context, "upload_prepare", "lấy link", 22, 28, lambda f: f.name
+            ),
+        )
+
+        if not batch_presigned.all_succeeded:
+            if batch_presigned.is_cancelled or context.is_cancelled():
+                context.error_message = "Tác vụ bị dừng bởi người dùng."
+            elif batch_presigned.failed:
+                context.error_message = f"Không lấy được link upload: {batch_presigned.failed[0][1]}"
+            else:
+                context.error_message = "Không lấy đủ link upload từ Autoenhance."
+            return False
+
+        upload_tasks: List[Tuple[Path, Dict[str, Any]]] = batch_presigned.succeeded
+
+        # 2. Upload song song đa luồng lên AWS S3 qua run_parallel (có Retry & Delay)
+        context.set_step("upload", f"Bắt đầu tải {total_files} ảnh lên S3...", progress_pct=28)
+
         def _upload_one(task: Tuple[Path, Dict[str, Any]]) -> bool:
             f_path, s3_info = task
             url = s3_info.get("s3PutObjectUrl") or s3_info.get("url")
@@ -247,7 +285,7 @@ class AutoenhanceJob(BaseExecutor):
                 req_headers["Content-Type"] = mime
 
             last_err = ""
-            for _ in range(3):
+            for attempt in range(3):
                 if context.is_cancelled():
                     return False
                 try:
@@ -258,7 +296,9 @@ class AutoenhanceJob(BaseExecutor):
                         last_err = f"HTTP {r.status_code}: {r.text[:200]}"
                 except Exception as exc:
                     last_err = str(exc)
-                    time.sleep(1)
+
+                if attempt < 2:
+                    time.sleep(attempt + 1)
 
             raise IOError(f"Upload S3 thất bại cho file {f_path.name}: {last_err}")
 
@@ -268,15 +308,15 @@ class AutoenhanceJob(BaseExecutor):
             max_workers=self.max_upload_workers,
             stop_event=context.stop_event,
             on_progress=make_progress_reporter(
-                context, "upload", "upload", 25, 45, lambda task: task[0].name
+                context, "upload", "upload", 28, 45, lambda task: task[0].name
             ),
         )
 
         if not batch_res.all_succeeded:
-            if batch_res.is_cancelled:
+            if batch_res.is_cancelled or context.is_cancelled():
                 context.error_message = "Tác vụ upload bị dừng bởi người dùng."
             elif batch_res.failed:
-                context.error_message = f"Lỗi upload: {batch_res.failed[0][1]}"
+                context.error_message = f"Lỗi upload S3: {batch_res.failed[0][1]}"
             else:
                 context.error_message = "Không upload được đầy đủ ảnh lên S3."
             return False
@@ -294,32 +334,49 @@ class AutoenhanceJob(BaseExecutor):
         context.set_step("trigger_process", "Đang gửi tùy chọn xử lý AI...", progress_pct=48)
         prefs = context.preferences
 
-        sky_choice = str(prefs.get("sky_replacement", "auto")).lower()
-        sky_enabled = sky_choice != "none"
-        cloud_map = {
-            "auto": "LOW_CLOUD",
-            "sunny": "LOW_CLOUD",
-            "clear_blue": "CLEAR",
-            "cloudy": "HIGH_CLOUD",
-        }
-        cloud_type = cloud_map.get(sky_choice, "LOW_CLOUD") if sky_enabled else None
+        # 1. Cloud & Sky Replacement
+        cloud_type = prefs.get("cloud_type")
+        sky_replacement = (cloud_type is not None)
 
-        perspective_val = bool(prefs.get("vertical_correction", prefs.get("perspective_correction", True)))
+        # 2. Perspective Correction
+        persp_mode = prefs.get("perspective_correction_mode")
+        persp_correction = (persp_mode is not None)
 
-        payload = {
-            "ai_version": "latest",
-            "sky_replacement": sky_enabled,
+        # 3. Window Pull
+        win_type = prefs.get("window_pull_type")
+
+        # 4. Preset & Preset Version
+        preset_id = prefs.get("preset_id")
+        preset_version = 1 if preset_id is not None else None
+
+        # 5. Brackets
+        brackets_val = prefs.get("number_of_brackets_per_image")
+        bracket_str = str(brackets_val) if brackets_val is not None else None
+
+        payload: Dict[str, Any] = {
+            "ai_version": prefs.get("ai_version", "latest"),
+            "enhancement_style": prefs.get("enhancement_style"),
+            "sky_replacement": sky_replacement,
             "cloud_type": cloud_type,
-            "perspective_correction": perspective_val,
-            "perspective_correction_mode": "PRESERVE_CONTENT" if perspective_val else "OFF",
-            "lens_correction": bool(prefs.get("lens_correction", True)),
+            "perspective_correction": persp_correction,
+            "perspective_correction_mode": persp_mode,
             "privacy": bool(prefs.get("privacy", False)),
-            "number_of_brackets_per_image": 0,
-            "window_pull_type": "WINDOWS_WITH_SKIES",
+            "lens_correction": bool(prefs.get("lens_correction", False)),
+            "window_pull_type": win_type,
+            "contrast_boost": prefs.get("contrast_boost", None),
+            "saturation_level": prefs.get("saturation_level", None),
+            "upscale": bool(prefs.get("upscale", False)),
+            "restage": {
+                "tvs": prefs.get("restage.tvs", "AS_SHOT"),
+                "fire_in_fireplaces": prefs.get("restage.fire_in_fireplaces", "AS_SHOT"),
+                "photographer": prefs.get("restage.photographer", "AS_SHOT"),
+                "environment": "AS_SHOT",
+                "grass": prefs.get("restage.grass", "AS_SHOT"),
+            },
+            "preset_id": preset_id,
+            "preset_version": preset_version,
+            "number_of_brackets_per_image": bracket_str,
         }
-        preset_id = prefs.get("preset_id") or prefs.get("preset")
-        if preset_id:
-            payload["preset_id"] = str(preset_id)
 
         try:
             url = f"{API_BASE}{ENDPOINT_PROCESS.format(order_id=order_id)}"
