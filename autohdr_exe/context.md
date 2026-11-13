@@ -8,6 +8,9 @@ Tài liệu này dùng để khôi phục toàn bộ ngữ cảnh kỹ thuật, 
 
 * **Workspace:** `d:\workspace\fl-u01-viet`
 * **Git Branch:** `deploy/exe`
+* **Commit mới nhất:** `ff6e2f0` (*"feat(autoenhance): implement packet grouping for HDR brackets and filter final processed images"*)
+* **Trạng thái Git:** Sạch sẽ (`clean`), đang ahead `origin/deploy/exe` 1 commit (sẵn sàng push).
+* **Phiên bản hệ thống:** `v6.1` (xác định tại `version.md` và `core/constants.py`).
 * **Virtualenv:** `autohdr_exe/.venv/Scripts/python.exe`
 * **Cấu hình PYTHONPATH bắt buộc khi chạy CLI / Test:**
   ```powershell
@@ -57,7 +60,7 @@ autohdr_exe/
 │   │   │   └── autoenhance.py         # fetch_order_status, poll_order_completion, apply_pil_postprocess, download_order_images, filter_final_processed_images
 │   │   ├── constants/
 │   │   │   ├── autohdr.py             # Base URL (old.autohdr.com), endpoints, storage filename
-│   │   │   ├── autoenhance.py         # Base URL (api.autoenhance.ai/v3), endpoints, storage filename
+│   │   │   ├── autoenhance.py         # Base URL (api.autoenhance.ai/v3), endpoints (/orders/, /brackets/, /images/, /process), storage filename
 │   │   │   └── autoenhance_options.json # Metadata tùy chọn bầu trời, preset, góc nghiêng
 │   │   ├── auth/
 │   │   │   ├── base.py                # BaseAuthProvider & AuthProviderRegistry
@@ -76,10 +79,10 @@ autohdr_exe/
 │   │   ├── autoenhance_download.py    # "autoenhance_download": AutoenhanceDownloadJob (URL/Order ID -> Poll -> PIL Postprocess -> Download)
 │   │   └── runner.py                  # JobRunner: Bộ điều phối đa luồng, stop/resume khẩn cấp, emit callbacks
 │   │
-│   └── tests/                         # Unit tests độc lập (100% PASS)
+│   └── tests/                         # Unit tests độc lập (42/42 tests - 100% PASS)
 │       ├── test_auth.py               # Test Auth switch/delete/active (4/4 PASS)
 │       ├── test_executor_base.py      # Test BaseExecutor & Gatekeeper (6/6 PASS)
-│       ├── test_jobs.py               # Test 4 Jobs AutoHDR, AutoHDRDownload, Autoenhance, AutoenhanceDownload (16/16 PASS)
+│       ├── test_jobs.py               # Test 4 Jobs & Bracket Packet Grouping & Filter (16/16 PASS)
 │       ├── test_runner.py             # Test JobRunner đa luồng & cancel (6/6 PASS)
 │       └── test_utils.py              # Test I/O, thread, poll, autoenhance utils (10/10 PASS)
 │
@@ -97,6 +100,7 @@ autohdr_exe/
 │   ├── screen_main.py                 # Main Controller tinh gọn (~600 dòng): Điều phối 5 Components và JobRunner. Zero Fallbacks!
 │   └── app.py                         # App Root: Khởi tạo Application, bỏ hoàn toàn PipelineManager
 │
+├── wf_autoenhance.md                  # Tài liệu kiến trúc toàn diện & Lifecycle 6 bước Autoenhance Engine v3
 └── main.py                            # Entry point & Smoke Test (--smoke-test kiểm tra 5 components & 4 jobs)
 ```
 
@@ -114,7 +118,7 @@ autohdr_exe/
 4. **Ngăn chặn rò rỉ bộ nhớ (Log FIFO Rotation):** `LogViewerFrame` tự động giới hạn 500 dòng log; khi vượt quá sẽ đẩy dòng cũ nhất ra khỏi mảng và xóa dòng đầu trong `log_textbox`.
 5. **Khắc phục lỗi đè Modal Dialog:** Trong `tab_accounts.py`, thêm `parent=self` vào `messagebox.askyesno` để popup xác nhận xóa tài khoản luôn nổi lên trên modal `CTkToplevel`.
 6. **Bỏ ghi đĩa liên tục trên sự kiện gõ phím:** Đã bỏ bind `<KeyRelease>` ghi `cache.save()` ở ô nhập địa chỉ; chỉ lưu vào cache khi người dùng rời con trỏ (`<FocusOut>`).
-7. **Đa luồng hóa & Smart Retry khi xin presigned S3 (Autoenhance):** Đã nâng cấp bước xin link presigned (`POST /images/`) từ tuần tự sang song song qua `run_parallel` (4 workers), tích hợp Smart Retry (xử lý HTTP 429 với `Retry-After`, 5xx với Linear Backoff), fail-fast với lỗi 4xx client và bổ sung thời gian nghỉ retry đồng bộ cho mọi thất bại khi upload S3.
+7. **Đa luồng hóa & Smart Retry khi xin presigned S3 (Autoenhance):** Đã nâng cấp bước xin link presigned (`POST /images/` hoặc `POST /brackets/`) từ tuần tự sang song song qua `run_parallel` (4 workers), tích hợp Smart Retry (xử lý HTTP 429 với `Retry-After`, 5xx với Linear Backoff), fail-fast với lỗi 4xx client và bổ sung thời gian nghỉ retry đồng bộ cho mọi thất bại khi upload S3.
 8. **Chuẩn hóa HDR Brackets sang Push theo Packet (Explicit Grouping):**
    * Đã phân tách luồng: Nếu `number_of_brackets_per_image > 1`, tự động chuyển sang gọi endpoint chuyên dụng `POST /brackets/` (`ENDPOINT_BRACKETS = "/brackets/"`).
    * Luôn sắp xếp danh sách file theo tên (`sorted_files = sorted(ready_files, key=lambda f: f.name)`) để đảm bảo các frame cùng góc chụp luôn liền kề nhau.
@@ -130,9 +134,9 @@ autohdr_exe/
 
 ## 5. Danh Sách Mã Nguồn Rác Cần Dọn Dẹp (Dead Code Backlog)
 
-Các file sau đây đã trở thành **Dead Code** (hoàn toàn không còn được import hay sử dụng trong luồng chạy của ứng dụng):
+Các file sau đây đã trở thành **Dead Code** (hoàn toàn không còn được import hay sử dụng trong luồng chạy của ứng dụng, cần xin phép User để xóa):
 1. `autohdr_exe/core/pipeline.py` (677 dòng) — Hệ thống pipeline cũ, đã được thay thế hoàn toàn bởi `1tm/jobs/runner.py`.
-2. `autohdr_exe/steps/` (9 file steps cũ: `step0_session.py` đến `step8_postprocess.py`) — Đã thay thế bởi 4 Job trong `1tm/jobs/`.
+2. `autohdr_exe/steps/` (Thư mục chứa 9 file steps cũ: `step0_session.py` đến `step8_postprocess.py`, bao gồm cả `step6_get_processed_urls.py`) — Đã thay thế bởi 4 Job trong `1tm/jobs/`.
 3. `autohdr_exe/core/logger.py` — Đã thay thế bởi logging theo job của `JobRunner` và `BaseExecutor`.
 4. `autohdr_exe/ui/accounts_dialog.py` — Đã bị xóa trên git, logic chuyển vào `tab_accounts.py` trong `SettingsDialog`.
 
@@ -140,19 +144,25 @@ Các file sau đây đã trở thành **Dead Code** (hoàn toàn không còn đ�
 
 ## 6. Các Nhiệm Vụ Tiếp Theo Cho Phiên Chat Mới (Next Tasks)
 
-1. **Dọn dẹp triệt để Dead Code:**
-   * Trình User phê duyệt và tiến hành xóa bỏ `autohdr_exe/core/pipeline.py`, thư mục `autohdr_exe/steps/`, và `autohdr_exe/core/logger.py` (nếu không còn module nào tham chiếu).
-2. **Cập nhật CI/CD Workflow (`.github/workflows/build-exe.yml`):**
+1. **Đẩy mã nguồn lên Remote (Git Push):**
+   * Thực hiện `git push origin deploy/exe` để đồng bộ commit `ff6e2f0` lên repository từ xa khi User yêu cầu.
+2. **Cấu hình Throttling / Giãn nhịp độ chạy (Nếu cần):**
+   * User đã thảo luận về việc làm chậm nhịp độ xử lý job để tránh server rate limit hoặc giảm tải CPU.
+   * Các vị trí cấu hình đã sẵn sàng:
+     * `DEFAULT_POLL_INTERVAL`: Tăng từ 5s lên 10s trong `libs/constants/autoenhance.py`.
+     * `MAX_API_WORKERS` / `MAX_DOWNLOAD_WORKERS`: Giảm từ 4 xuống 2 hoặc 1.
+     * Chèn `time.sleep(0.5)` trong `_fetch_presigned_one` và `time.sleep(2)` trước khi gọi `/process`.
+3. **Dọn dẹp triệt để Dead Code:**
+   * Trình User phê duyệt và tiến hành xóa bỏ `autohdr_exe/core/pipeline.py`, thư mục `autohdr_exe/steps/`, và `autohdr_exe/core/logger.py`.
+4. **Cập nhật CI/CD Workflow (`.github/workflows/build-exe.yml`):**
    * Bổ sung các flags thu thập dữ liệu và module cho PyInstaller để đóng gói `.exe` chuẩn xác:
      * `--collect-submodules ui`
      * `--collect-data customtkinter`
      * `--collect-all tkinterdnd2`
-3. **Telemetry & Runtime Statistics:**
+5. **Telemetry & Runtime Statistics:**
    * Tích hợp `stats_client.append_runtime()` (`core/stats_client.py`) vào template method của `BaseExecutor` hoặc `JobRunner` để thống kê thời gian chạy nếu nghiệp vụ yêu cầu.
-4. **Lưu lịch sử Job giữa các phiên làm việc (Job History Persistence):**
+6. **Lưu lịch sử Job giữa các phiên làm việc (Job History Persistence):**
    * Hiện tại danh sách jobs trong `JobRunner` lưu in-memory (`self._jobs = {}`). Khi tắt app và mở lại, danh sách trên giao diện sẽ trống. Nếu người dùng muốn giữ lại lịch sử các job gần nhất, cần thiết kế lưu/đọc `cache/jobs_history.json`.
-5. **Chuẩn hóa ảnh đầu vào RAW/DNG (Step 1 Image Preparation):**
-   * Kiểm tra và hỗ trợ convert RAW/DNG sang JPG trước khi upload nếu người dùng có nhu cầu xử lý file máy ảnh trực tiếp.
 
 ---
 
