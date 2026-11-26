@@ -10,6 +10,7 @@ Kiến trúc sạch 100%:
 import os
 import sys
 import threading
+import uuid
 import customtkinter as ctk
 from typing import Optional
 from urllib.parse import urlparse
@@ -57,20 +58,31 @@ def parse_autoenhance_url(url_str: str) -> tuple[bool, str, str]:
 
 
 def parse_autohdr_url(url_str: str) -> tuple[bool, str, str]:
-    """Chỉ chấp nhận URL AutoHDR: https://app.autohdr.com/photoshoots/<photoshoot_id>"""
+    """Chấp nhận URL Photoshoot hợp lệ hoặc mã UUID thuần túy."""
     raw = url_str.strip()
+    if not raw:
+        return False, "", "Vui lòng nhập link hoặc UUID photoshoot"
+
+    # Cho phép nhập trực tiếp UUID
+    try:
+        parsed_uuid = uuid.UUID(raw)
+        if str(parsed_uuid).lower() == raw.lower():
+            return True, raw, ""
+    except ValueError:
+        pass
+
     if not (raw.startswith("http://") or raw.startswith("https://")):
-        return False, "", "Vui lòng nhập link URL hợp lệ (bắt đầu bằng http:// hoặc https://)"
+        return False, "", "Vui lòng nhập link URL hợp lệ hoặc mã UUID photoshoot"
 
     parsed = urlparse(raw)
     if "autohdr" not in parsed.netloc.lower():
-        return False, "", f"Link không thuộc hệ thống autohdr (Domain: {parsed.netloc})"
+        return False, "", "Liên kết không hợp lệ cho engine đã chọn"
 
     parts = [p for p in parsed.path.strip("/").split("/") if p]
-    if len(parts) >= 2 and parts[0].lower() == "photoshoots":
+    if len(parts) >= 2 and parts[0].lower() in ("photoshoots", "share"):
         return True, parts[1], ""
 
-    return False, "", "Đường dẫn URL không đúng cấu trúc (/photoshoots/<id>)"
+    return False, "", "Đường dẫn URL không đúng cấu trúc photoshoot"
 
 
 class ScreenMain(ctk.CTkFrame):
@@ -489,21 +501,32 @@ class ScreenMain(ctk.CTkFrame):
             self.drop_zone.set_url_error(f"⚠️ {err}")
             return
 
-        if not self.current_session:
-            self.drop_zone.set_url_error("⚠️ Cần đăng nhập AutoHDR trước khi tải")
-            return
-
-        self.btn_process.configure(state="disabled", text="⏳ Đang kiểm tra key...")
+        self.btn_process.configure(state="disabled", text="⏳ Đang xác thực key...")
         self.update_idletasks()
 
-        def _do_check_hdr():
-            if not self.api.check_key():
+        def _do_check_hdr_v2():
+            v2_creds = self.api.fetch_v2_credentials()
+            if not v2_creds:
+                status = self.api.last_check_status
+                err_msg = self.api.last_error_message
                 self.after(0, lambda: self.btn_process.configure(state="normal", text="BẮT ĐẦU XỬ LÝ"))
-                self.after(0, lambda: self.app.show_key_screen(self.api.last_check_status))
+                if status in ("network_error", "error"):
+                    self.after(0, lambda: self.drop_zone.set_url_error("⚠️ Lỗi ở bước xác thực: Không thể kết nối máy chủ."))
+                elif status == "v2_not_configured":
+                    self.after(0, lambda: self.drop_zone.set_url_error("⚠️ Lỗi ở bước xác thực: Máy chủ chưa cấu hình v2."))
+                elif status == "outdated":
+                    self.after(0, lambda m=err_msg: self.drop_zone.set_url_error(f"⚠️ {m or 'Phiên bản ứng dụng đã cũ.'}"))
+                else:
+                    self.after(0, lambda s=status: self.app.show_key_screen(s))
                 return
-            self.after(0, lambda: self._create_and_start_manual_job(address, photoshoot_uuid))
+            self.after(
+                0,
+                lambda creds=v2_creds: self._create_and_start_manual_job(
+                    address, raw_url, photoshoot_uuid, creds
+                ),
+            )
 
-        threading.Thread(target=_do_check_hdr, daemon=True).start()
+        threading.Thread(target=_do_check_hdr_v2, daemon=True).start()
 
     def _create_and_start_ae_download_job(self, address: str, order_id: str):
         cache.set("address", address)
@@ -533,17 +556,29 @@ class ScreenMain(ctk.CTkFrame):
         self.drop_zone.clear()
         self.btn_process.configure(state="normal", text="BẮT ĐẦU XỬ LÝ")
 
-    def _create_and_start_manual_job(self, address: str, photoshoot_uuid: str):
+    def _create_and_start_manual_job(
+        self,
+        address: str,
+        raw_url: str,
+        photoshoot_uuid: str,
+        v2_creds: dict,
+    ):
         cache.set("address", address)
         download_dir = getattr(self, "download_dir", "").strip() or os.path.expanduser("~/Downloads")
-        cookie = self.current_session.cookie if self.current_session else ""
 
         ctx = self.job_runner.submit_job(
-            engine="autohdr_download",
+            engine="autohdr_download_v2",
             file_paths=[],
             output_dir=download_dir,
-            credentials={"cookie": cookie},
-            preferences={"photoshoot_uuid": photoshoot_uuid, "address": address},
+            credentials={
+                "resolver_key": v2_creds["resolver_key"],
+                "hwid": v2_creds["hwid"],
+                "server_url": v2_creds["server_url"],
+            },
+            preferences={
+                "photoshoot_url": raw_url.strip(),
+                "address": address,
+            },
             ui_callback_log=lambda lvl, msg: self.after(0, lambda l=lvl, m=msg: self._on_job_log(ctx.job_id, f"[{l}] {m}")),
             ui_callback_progress=lambda step, desc, pct: self.after(0, lambda s=step, d=desc, p=pct: self._on_job_progress(ctx.job_id, s, d, p)),
             ui_callback_finished=lambda c: self.after(0, lambda fin_c=c: self._on_job_finished(fin_c)),

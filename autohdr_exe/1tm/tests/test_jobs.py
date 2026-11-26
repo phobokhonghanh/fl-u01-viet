@@ -19,7 +19,13 @@ sys.path.insert(0, str(LIBS_DIR))
 sys.path.insert(0, str(AUTOHDR_DIR))
 
 from libs.executor import ExecutionContext, ExecutorRegistry
-from jobs import AutoHDRJob, AutoHDRDownloadJob, AutoenhanceJob, AutoenhanceDownloadJob
+from jobs import (
+    AutoHDRJob,
+    AutoHDRDownloadJob,
+    AutoHDRDownloadV2Job,
+    AutoenhanceJob,
+    AutoenhanceDownloadJob,
+)
 
 
 def test_registry_auto_registration():
@@ -27,14 +33,17 @@ def test_registry_auto_registration():
     assert ExecutorRegistry.get("autohdr") is AutoHDRJob
     assert ExecutorRegistry.get("AUTOHDR") is AutoHDRJob
     assert ExecutorRegistry.get("autohdr_download") is AutoHDRDownloadJob
+    assert ExecutorRegistry.get("autohdr_download_v2") is AutoHDRDownloadV2Job
+    assert ExecutorRegistry.get("AUTOHDR_DOWNLOAD_V2") is AutoHDRDownloadV2Job
     assert ExecutorRegistry.get("autoenhance") is AutoenhanceJob
     assert ExecutorRegistry.get("AUTOENHANCE") is AutoenhanceJob
     assert ExecutorRegistry.get("autoenhance_download") is AutoenhanceDownloadJob
     assert "autohdr" in ExecutorRegistry.list_available()
     assert "autohdr_download" in ExecutorRegistry.list_available()
+    assert "autohdr_download_v2" in ExecutorRegistry.list_available()
     assert "autoenhance" in ExecutorRegistry.list_available()
     assert "autoenhance_download" in ExecutorRegistry.list_available()
-    print("  -> PASS: Toàn bộ 4 engine (Upload & Download cho cả AutoHDR và Autoenhance) đã tự động đăng ký vào Registry.")
+    print("  -> PASS: Toàn bộ 5 engine (bao gồm AutoHDRDownloadV2Job) đã tự động đăng ký vào Registry.")
 
 
 def test_autohdr_job_missing_auth():
@@ -701,6 +710,89 @@ def test_autohdr_download_job():
             print("  -> PASS: AutoHDRDownloadJob tải ảnh photoshoot thành công không cần file nguồn.")
 
 
+def test_autohdr_download_job_full_workflow():
+    print("[TEST] 12. Kiểm thử AutoHDRDownloadJob toàn diện (Step 6 unwatermark, proxy & stats)...")
+    from unittest.mock import patch, MagicMock
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        out_p = Path(temp_dir) / "output"
+        context = ExecutionContext(
+            job_id="hdr_full_dl_test",
+            file_paths=[],
+            output_dir=str(out_p),
+            credentials={"cookie": "test_cookie=1"},
+            preferences={
+                "photoshoot_uuid": "https://old.autohdr.com/photoshoots/11111111-2222-3333-4444-555555555555",
+                "proxy_config": {"ip": "127.0.0.1", "port": "8080"},
+            },
+        )
+
+        mock_session = MagicMock()
+
+        def mock_get(url, **kwargs):
+            resp = MagicMock()
+            resp.status_code = 200
+            if "uuid" in url:
+                resp.json.return_value = {"id": 99999}
+            elif "processed_photos" in url:
+                resp.json.return_value = [
+                    {"id": 101, "filename": "photo_101.jpg"},
+                    {"id": 102, "filename": "photo_102.jpg"},
+                ]
+            elif "/adjustments" in url:
+                if "101" in url:
+                    resp.json.return_value = {
+                        "base_url": "https://cloudfront.net/watermarked/101_wm.jpg"
+                    }
+                else:
+                    resp.json.return_value = {
+                        "base_url": "https://cloudfront.net/clean/102_clean.jpg"
+                    }
+            return resp
+
+        def mock_post(url, **kwargs):
+            resp = MagicMock()
+            resp.status_code = 200
+            if "generate-adjustment-presigned-url" in url:
+                resp.json.return_value = {
+                    "success": True,
+                    "presigned_url": "https://s3.mock/upload/101.jpg",
+                    "s3_key": "s3/key/101.jpg",
+                }
+            elif "finalize-adjustment" in url:
+                resp.json.return_value = {
+                    "success": True,
+                    "url": "https://cloudfront.net/full/101_unwatermarked.jpg",
+                }
+            return resp
+
+        mock_session.get.side_effect = mock_get
+        mock_session.post.side_effect = mock_post
+
+        job = AutoHDRDownloadJob(session=mock_session)
+
+        with patch.object(job, "_step_download", return_value=True) as mock_dl, \
+             patch("requests.get") as mock_req_get, \
+             patch("requests.put") as mock_req_put, \
+             patch("core.stats_client.stats_client.append_runtime") as mock_stats:
+            mock_req_get.return_value = MagicMock(status_code=200, content=b"watermarked_bytes")
+            mock_req_put.return_value = MagicMock(status_code=200)
+
+            res = job.execute(context)
+            assert res.status == "completed"
+            assert res.remote_job_id == "99999"
+            assert mock_session.proxies["http"] == "http://127.0.0.1:8080"
+            mock_dl.assert_called_once()
+            called_urls = mock_dl.call_args[0][1]
+            assert len(called_urls) == 2
+            assert called_urls[0]["url"] == "https://cloudfront.net/full/101_unwatermarked.jpg"
+            assert called_urls[1]["url"] == "https://cloudfront.net/clean/102_clean.jpg"
+            mock_stats.assert_called_once_with("11111111-2222-3333-4444-555555555555")
+            mock_req_get.assert_called_once()
+            mock_req_put.assert_called_once()
+            print("  -> PASS: AutoHDRDownloadJob thực thi trọn vẹn Step 6 (unwatermark) và Step 7 (download).")
+
+
 def test_autoenhance_upload_presigned_retry_and_backoff():
     print("[TEST] 14. Kiểm thử Autoenhance upload đa luồng, retry khi gặp 429 và S3 lỗi...")
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -890,6 +982,423 @@ def test_filter_final_processed_images_logic():
     print("  -> PASS: filter_final_processed_images lọc chính xác 2 ảnh HDR thành phẩm, loại bỏ toàn bộ ảnh nháp thô.")
 
 
+def test_autohdr_download_v2_success_and_no_fallback():
+    print("[TEST] 17. Kiểm thử AutoHDRDownloadV2Job thành công, tải primary URL và không lộ domain trong log...")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        out_p = Path(temp_dir) / "output"
+        logs = []
+        context = ExecutionContext(
+            job_id="hdr_v2_ok",
+            file_paths=[],
+            output_dir=str(out_p),
+            credentials={
+                "resolver_key": "resolver-secret-key",
+                "hwid": "fixed-hash-64chars",
+                "server_url": "https://resolver.internal.test",
+            },
+            preferences={"photoshoot_url": "https://app.autohdr.com/photoshoots/uuid-1234-abcd"},
+            on_log=lambda lvl, msg: logs.append((lvl, msg)),
+        )
+
+        mock_sess = MagicMock()
+        mock_res = MagicMock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {
+            "success": True,
+            "uuid": "uuid-1234-abcd",
+            "photoshoot_id": 778899,
+            "title": "123 Main St",
+            "folder": "123_Main_St",
+            "items": [
+                {
+                    "filename": "room.jpg",
+                    "urls": [
+                        "https://cdn.primary-v2.test/room_1.jpg",
+                        "https://cdn.fallback-v2.test/room_1_alt.jpg",
+                    ],
+                },
+                {
+                    "filename": "room.jpg",
+                    "urls": [
+                        "https://cdn.primary-v2.test/room_2.jpg",
+                    ],
+                },
+            ],
+        }
+        mock_sess.post.return_value = mock_res
+
+        called_urls = []
+        import requests
+        orig_get = requests.get
+
+        def fake_get(url, **kwargs):
+            called_urls.append(url)
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.iter_content.return_value = [b"chunk1_", b"chunk2"]
+            return resp
+
+        try:
+            requests.get = fake_get
+            with patch("jobs.autohdr_download_v2.stats_client.append_runtime") as mock_stats:
+                job = AutoHDRDownloadV2Job(session=mock_sess, max_download_workers=2)
+                res = job.execute(context)
+
+            assert res.status == "completed", f"Expected completed, got {res.status}: {res.error_message}"
+            assert res.remote_job_id == "778899"
+            assert "resolver_key" not in res.credentials
+            assert "hwid" not in res.credentials
+            assert "server_url" not in res.credentials
+            assert mock_sess.post.call_args.args[0] == "https://resolver.internal.test/api/photoshoot/resolve"
+            sent_payload = mock_sess.post.call_args.kwargs["json"]
+            assert sent_payload == {
+                "key": "resolver-secret-key",
+                "hwid": "fixed-hash-64chars",
+                "url": "https://app.autohdr.com/photoshoots/uuid-1234-abcd",
+            }
+            assert len(res.downloaded_files) == 2
+            assert (out_p / "123_Main_St" / "room.jpg").read_bytes() == b"chunk1_chunk2"
+            assert (out_p / "123_Main_St" / "room_1.jpg").read_bytes() == b"chunk1_chunk2"
+            assert not list((out_p / "123_Main_St").glob("*.part"))
+            assert set(called_urls) == {
+                "https://cdn.primary-v2.test/room_1.jpg",
+                "https://cdn.primary-v2.test/room_2.jpg",
+            }
+            assert all("fallback-v2" not in u for u in called_urls)
+            mock_stats.assert_called_once_with("uuid-1234-abcd")
+            for _, msg in logs:
+                assert "resolver.internal.test" not in msg
+                assert "primary-v2.test" not in msg
+                assert "http://" not in msg and "https://" not in msg
+            print("  -> PASS: AutoHDRDownloadV2Job tải đúng primary URL, chống trùng tên, không lộ URL/domain.")
+        finally:
+            requests.get = orig_get
+
+
+def test_autohdr_download_v2_smart_resume_skips_existing():
+    print("[TEST] 18. Kiểm thử AutoHDRDownloadV2Job Smart Resume bỏ qua file đã tồn tại...")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        out_p = Path(temp_dir) / "output"
+        target_dir = out_p / "MyFolder"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        existing_file = target_dir / "photo1.jpg"
+        existing_file.write_bytes(b"already_downloaded_data")
+
+        context = ExecutionContext(
+            job_id="hdr_v2_resume",
+            file_paths=[],
+            output_dir=str(out_p),
+            credentials={
+                "resolver_key": "resolver-secret-key",
+                "hwid": "fixed-hash-64chars",
+                "server_url": "https://resolver.internal.test",
+            },
+            preferences={"photoshoot_url": "uuid-resume-01"},
+        )
+
+        mock_sess = MagicMock()
+        mock_res = MagicMock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {
+            "success": True,
+            "uuid": "uuid-resume-01",
+            "title": "MyFolder",
+            "folder": "MyFolder",
+            "items": [
+                {"filename": "photo1.jpg", "urls": ["https://cdn.test/photo1.jpg"]},
+                {"filename": "photo2.jpg", "urls": ["https://cdn.test/photo2.jpg"]},
+            ],
+        }
+        mock_sess.post.return_value = mock_res
+
+        called_urls = []
+        import requests
+        orig_get = requests.get
+
+        def fake_get(url, **kwargs):
+            called_urls.append(url)
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.iter_content.return_value = [b"new_photo2"]
+            return resp
+
+        try:
+            requests.get = fake_get
+            with patch("jobs.autohdr_download_v2.stats_client.append_runtime"):
+                job = AutoHDRDownloadV2Job(session=mock_sess, max_download_workers=1)
+                res = job.execute(context)
+
+            assert res.status == "completed"
+            assert called_urls == ["https://cdn.test/photo2.jpg"]
+            assert existing_file.read_bytes() == b"already_downloaded_data"
+            assert (target_dir / "photo2.jpg").read_bytes() == b"new_photo2"
+            print("  -> PASS: Smart Resume bỏ qua file đã tải và chỉ tải file còn thiếu.")
+        finally:
+            requests.get = orig_get
+
+
+def test_autohdr_download_v2_no_fallback_and_sanitized_errors():
+    print("[TEST] 19. Kiểm thử AutoHDRDownloadV2Job báo lỗi theo step và KHÔNG lộ URL/domain...")
+    import requests
+
+    def _assert_no_url_leak(text: str):
+        lower = text.lower()
+        assert "http://" not in lower
+        assert "https://" not in lower
+        assert "103.74.103.68" not in lower
+        assert "resolver.internal.test" not in lower
+        assert "secret-domain.com" not in lower
+        assert "fallback-cdn.com" not in lower
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        out_p = Path(temp_dir) / "output"
+
+        # Case 1: Thiếu input -> lỗi step resolve
+        ctx_empty = ExecutionContext(
+            job_id="v2_empty",
+            file_paths=[],
+            output_dir=str(out_p),
+            credentials={
+                "resolver_key": "resolver-secret",
+                "hwid": "fixed-hwid",
+                "server_url": "https://resolver.internal.test",
+            },
+        )
+        res_empty = AutoHDRDownloadV2Job().execute(ctx_empty)
+        assert res_empty.status == "failed"
+        assert "resolve" in res_empty.error_message.lower()
+        _assert_no_url_leak(res_empty.error_message)
+
+        # Case 1b: Thiếu server_url, resolver_key hoặc hwid -> chặn ở step resolve, không fallback
+        for bad_creds in (
+            {"resolver_key": "resolver-secret", "hwid": "fixed-hwid"},
+            {"server_url": "https://resolver.internal.test", "hwid": "fixed-hwid"},
+            {"server_url": "https://resolver.internal.test", "resolver_key": "resolver-secret"},
+        ):
+            ctx_bad = ExecutionContext(
+                job_id="v2_bad_creds",
+                file_paths=[],
+                output_dir=str(out_p),
+                credentials=bad_creds,
+                preferences={"photoshoot_url": "uuid-1"},
+            )
+            res_bad = AutoHDRDownloadV2Job().execute(ctx_bad)
+            assert res_bad.status == "failed"
+            assert "resolve" in res_bad.error_message.lower()
+            _assert_no_url_leak(res_bad.error_message)
+
+        # Case 2: ConnectionError có chứa host/IP -> lỗi step resolve, không lộ IP
+        mock_sess_conn = MagicMock()
+        mock_sess_conn.post.side_effect = requests.ConnectionError(
+            "HTTPConnectionPool(host='103.74.103.68', port=8080): Connection refused"
+        )
+        ctx_conn = ExecutionContext(
+            job_id="v2_conn",
+            file_paths=[],
+            output_dir=str(out_p),
+            credentials={
+                "resolver_key": "resolver-secret",
+                "hwid": "fixed-hwid",
+                "server_url": "https://resolver.internal.test",
+            },
+            preferences={"photoshoot_url": "uuid-1"},
+        )
+        res_conn = AutoHDRDownloadV2Job(session=mock_sess_conn).execute(ctx_conn)
+        assert res_conn.status == "failed"
+        assert "resolve" in res_conn.error_message.lower()
+        _assert_no_url_leak(res_conn.error_message)
+
+        # Case 3: HTTP 403 có URL trong JSON error -> lỗi step resolve, sanitize sạch URL
+        mock_sess_http = MagicMock()
+        err_resp = MagicMock()
+        err_resp.status_code = 403
+        err_resp.json.return_value = {"error": "Access denied at https://secret-domain.com/api/photoshoot/resolve"}
+        mock_sess_http.post.return_value = err_resp
+        ctx_http = ExecutionContext(
+            job_id="v2_http",
+            file_paths=[],
+            output_dir=str(out_p),
+            credentials={
+                "resolver_key": "resolver-secret",
+                "hwid": "fixed-hwid",
+                "server_url": "https://resolver.internal.test",
+            },
+            preferences={"photoshoot_url": "uuid-2"},
+        )
+        res_http = AutoHDRDownloadV2Job(session=mock_sess_http).execute(ctx_http)
+        assert res_http.status == "failed"
+        assert "resolve" in res_http.error_message.lower()
+        assert "403" in res_http.error_message
+        _assert_no_url_leak(res_http.error_message)
+
+        # Case 4: Lỗi ở step download -> KHÔNG fallback sang urls[1], không lộ URL/domain
+        mock_sess_dl = MagicMock()
+        ok_resp = MagicMock()
+        ok_resp.status_code = 200
+        ok_resp.json.return_value = {
+            "success": True,
+            "uuid": "uuid-dl-fail",
+            "title": "DLFail",
+            "folder": "DLFail",
+            "items": [
+                {
+                    "filename": "fail_photo.jpg",
+                    "urls": [
+                        "https://secret-domain.com/primary.jpg",
+                        "https://fallback-cdn.com/backup.jpg",
+                    ],
+                }
+            ],
+        }
+        mock_sess_dl.post.return_value = ok_resp
+
+        called_dl = []
+        orig_get = requests.get
+
+        def fake_get_500(url, **kwargs):
+            called_dl.append(url)
+            r = MagicMock()
+            r.status_code = 500
+            return r
+
+        try:
+            requests.get = fake_get_500
+            ctx_dl = ExecutionContext(
+                job_id="v2_dl_fail",
+                file_paths=[],
+                output_dir=str(out_p),
+                credentials={
+                    "resolver_key": "resolver-secret",
+                    "hwid": "fixed-hwid",
+                    "server_url": "https://resolver.internal.test",
+                },
+                preferences={"photoshoot_url": "uuid-dl-fail"},
+            )
+            res_dl = AutoHDRDownloadV2Job(session=mock_sess_dl, max_download_workers=1).execute(ctx_dl)
+            assert res_dl.status == "failed"
+            assert "download" in res_dl.error_message.lower()
+            assert called_dl == ["https://secret-domain.com/primary.jpg"]
+            _assert_no_url_leak(res_dl.error_message)
+        finally:
+            requests.get = orig_get
+
+        print("  -> PASS: Lỗi báo rõ theo step (resolve/download), không fallback URL và không lộ URL/domain.")
+
+
+def test_autohdr_download_v2_cancel_cleans_part_file():
+    print("[TEST] 20. Kiểm thử AutoHDRDownloadV2Job hủy giữa chừng xóa sạch file .part...")
+    import requests
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        out_p = Path(temp_dir) / "output"
+        stop_ev = threading.Event()
+        context = ExecutionContext(
+            job_id="hdr_v2_cancel",
+            file_paths=[],
+            output_dir=str(out_p),
+            credentials={
+                "resolver_key": "resolver-secret",
+                "hwid": "fixed-hwid",
+                "server_url": "https://resolver.internal.test",
+            },
+            preferences={"photoshoot_url": "uuid-cancel"},
+            stop_event=stop_ev,
+        )
+
+        mock_sess = MagicMock()
+        ok_resp = MagicMock()
+        ok_resp.status_code = 200
+        ok_resp.json.return_value = {
+            "success": True,
+            "uuid": "uuid-cancel",
+            "title": "CancelDir",
+            "folder": "CancelDir",
+            "items": [{"filename": "big.jpg", "urls": ["https://cdn.test/big.jpg"]}],
+        }
+        mock_sess.post.return_value = ok_resp
+
+        orig_get = requests.get
+
+        def fake_get_cancel(url, **kwargs):
+            r = MagicMock()
+            r.status_code = 200
+
+            def _chunks(chunk_size=65536):
+                yield b"partial_bytes_"
+                stop_ev.set()
+                yield b"more_bytes"
+
+            r.iter_content = _chunks
+            return r
+
+        try:
+            requests.get = fake_get_cancel
+            res = AutoHDRDownloadV2Job(session=mock_sess, max_download_workers=1).execute(context)
+            assert res.status == "cancelled"
+            assert not (out_p / "CancelDir" / "big.jpg").exists()
+            assert not (out_p / "CancelDir" / "big.jpg.part").exists()
+            print("  -> PASS: Hủy giữa chừng dừng ngay và xóa sạch file .part.")
+        finally:
+            requests.get = orig_get
+
+
+def test_api_client_fetch_v2_credentials_no_cache_bypass():
+    print("[TEST] 21. Kiểm thử ApiClient.fetch_v2_credentials verify key trực tiếp và chỉ giữ credentials trong RAM...")
+    from core.api_client import ApiClient
+
+    api = ApiClient(base_url="https://backend.test")
+
+    with patch("core.api_client.cache.get", return_value="USER_APP_KEY"), \
+         patch("core.api_client.cache.set") as mock_cache_set, \
+         patch("core.api_client.cache.delete") as mock_cache_del, \
+         patch("core.api_client.get_hwid", return_value="user_hw_16"), \
+         patch("core.api_client.stats_client.dispatch_async"), \
+         patch("core.api_client.requests.post") as mock_post:
+
+        ok_resp = MagicMock()
+        ok_resp.status_code = 200
+        ok_resp.json.return_value = {
+            "status": "ok",
+            "valid": True,
+            "resolver_key": "RESOLVER_SECRET",
+            "hwid": "FIXED_V2_HASH",
+            "server_url": "https://resolver.internal.test",
+        }
+        mock_post.return_value = ok_resp
+
+        creds = api.fetch_v2_credentials()
+        assert creds == {
+            "resolver_key": "RESOLVER_SECRET",
+            "hwid": "FIXED_V2_HASH",
+            "server_url": "https://resolver.internal.test",
+        }
+        mock_post.assert_called_once()
+        mock_cache_set.assert_not_called()
+
+        # Thiếu server_url -> không fallback, trả None
+        incomplete_resp = MagicMock()
+        incomplete_resp.status_code = 200
+        incomplete_resp.json.return_value = {
+            "status": "ok",
+            "valid": True,
+            "resolver_key": "RESOLVER_SECRET",
+            "hwid": "FIXED_V2_HASH",
+        }
+        mock_post.return_value = incomplete_resp
+        assert api.fetch_v2_credentials() is None
+        assert api.last_check_status == "v2_not_configured"
+
+        # 403 -> xóa cache user key và trả None
+        bad_resp = MagicMock()
+        bad_resp.status_code = 403
+        mock_post.return_value = bad_resp
+        assert api.fetch_v2_credentials() is None
+        assert api.last_check_status == "invalid"
+        assert mock_cache_del.called
+
+        print("  -> PASS: fetch_v2_credentials luôn verify trực tiếp và không lưu resolver credentials xuống đĩa.")
+
+
 if __name__ == "__main__":
     test_registry_auto_registration()
     test_autohdr_job_missing_auth()
@@ -902,10 +1411,16 @@ if __name__ == "__main__":
     test_autoenhance_smart_resume_skips_to_download()
     test_autohdr_smart_resume_skips_to_download()
     test_autohdr_download_job()
+    test_autohdr_download_job_full_workflow()
     test_autoenhance_anti_collision_duplicate_names()
     test_autohdr_anti_collision_duplicate_names()
     test_autoenhance_download_job_from_order_id()
     test_autoenhance_upload_presigned_retry_and_backoff()
     test_autoenhance_packet_grouping_for_brackets()
     test_filter_final_processed_images_logic()
-    print("\n✅ TOÀN BỘ 16 BÀI TEST TÍCH HỢP JOBS ĐỀU ĐẠT 100%!")
+    test_autohdr_download_v2_success_and_no_fallback()
+    test_autohdr_download_v2_smart_resume_skips_existing()
+    test_autohdr_download_v2_no_fallback_and_sanitized_errors()
+    test_autohdr_download_v2_cancel_cleans_part_file()
+    test_api_client_fetch_v2_credentials_no_cache_bypass()
+    print("\n✅ TOÀN BỘ 23 BÀI TEST TÍCH HỢP JOBS ĐỀU ĐẠT 100%!")

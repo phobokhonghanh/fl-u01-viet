@@ -51,6 +51,7 @@ if "--smoke-test" in sys.argv:
         JobRunner,
         AutoHDRJob,
         AutoHDRDownloadJob,
+        AutoHDRDownloadV2Job,
         AutoenhanceJob,
         AutoenhanceDownloadJob,
     )

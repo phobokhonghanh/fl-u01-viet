@@ -10,7 +10,7 @@ from typing import Optional
 from core.cache import cache
 from core.stats_client import stats_client
 from core.utils import get_hwid
-from core.constants import CLIENT_VERSION
+from core.constants import CLIENT_VERSION, ENDPOINT_V2_CREDENTIALS
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ class ApiClient:
             base_url = os.getenv("AUTOHDR_API_BASE", "https://u01-viet-backend.ndinhnguyen-work.workers.dev")
         self.base_url = base_url.rstrip("/")
         self.last_check_status = "idle"
+        self.last_error_message = ""
 
     def _clear_license_cache(self):
         """Clear local license cache fields."""
@@ -148,3 +149,71 @@ class ApiClient:
             if cached_key:
                 return True
         return False
+
+    def fetch_v2_credentials(
+        self,
+        key: Optional[str] = None,
+        machine_id: Optional[str] = None,
+    ) -> Optional[dict]:
+        """
+        Verify user app key directly against backend (no 12h cache bypass) and return
+        runtime resolver credentials (resolver_key, hwid, server_url) in RAM only.
+        """
+        self.last_error_message = ""
+        if not machine_id:
+            machine_id = get_hwid()
+
+        user_key = (key if key is not None else cache.get("active_key") or "").strip()
+        if not user_key:
+            self.last_check_status = "missing"
+            return None
+
+        try:
+            res = requests.post(
+                f"{self.base_url}{ENDPOINT_V2_CREDENTIALS}",
+                json={"key": user_key, "machine_id": machine_id, "client_version": CLIENT_VERSION},
+                timeout=15,
+            )
+
+            if res.status_code == 200:
+                data = res.json()
+                if not data.get("valid", False):
+                    self.last_check_status = "outdated"
+                    self.last_error_message = str(data.get("message") or "")
+                    return None
+
+                resolver_key = str(data.get("resolver_key") or "").strip()
+                fixed_hwid = str(data.get("hwid") or "").strip()
+                server_url = str(data.get("server_url") or "").strip()
+                if not resolver_key or not fixed_hwid or not server_url:
+                    self.last_check_status = "v2_not_configured"
+                    return None
+
+                self.last_check_status = "valid_remote"
+                stats_client.dispatch_async()
+                return {
+                    "resolver_key": resolver_key,
+                    "hwid": fixed_hwid,
+                    "server_url": server_url,
+                }
+
+            if res.status_code == 403:
+                self._clear_license_cache()
+                self.last_check_status = "invalid"
+                return None
+
+            if res.status_code == 503:
+                self.last_check_status = "v2_not_configured"
+                return None
+
+            self.last_check_status = "error"
+            return None
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            logger.error("Không thể kết nối máy chủ xác thực v2.")
+            self.last_check_status = "network_error"
+        except Exception:
+            logger.error("Lỗi xác thực v2 từ máy chủ.")
+            self.last_check_status = "error"
+
+        return None
