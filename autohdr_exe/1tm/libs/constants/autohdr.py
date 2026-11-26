@@ -13,6 +13,10 @@ ENDPOINT_PRESIGNED_URLS: str = "/api/proxy/generate_presigned_urls"
 ENDPOINT_FINALIZE_UPLOAD: str = "/api/proxy/finalize_upload"
 ENDPOINT_ASSOCIATE_RUN: str = "/api/proxy/associate_and_run"
 ENDPOINT_PHOTOSHOOTS: str = "/api/proxy/photoshoots"
+ENDPOINT_PHOTOSHOOT_UUID_PROCESSED: str = "/api/proxy/photoshoots/uuid/{uuid}/processed_photos"
+ENDPOINT_PHOTOSHOOT_PROCESSED: str = "/api/proxy/photoshoots/{photoshoot_id}/processed_photos"
+ENDPOINT_PHOTO_ADJUSTMENTS: str = "/api/proxy/photos/{photo_id}/adjustments"
+ENDPOINT_GENERATE_ADJUSTMENT_PRESIGNED: str = "/api/proxy/photos/generate-adjustment-presigned-url"
 ENDPOINT_FINALIZE_ADJUSTMENT: str = "/api/proxy/photos/finalize-adjustment"
 
 # Storage filenames

@@ -439,7 +439,13 @@ class AutoHDRJob(BaseExecutor):
                 if context.is_cancelled():
                     raise IOError("Tác vụ tải ảnh bị dừng bởi người dùng.")
                 try:
-                    r = requests.get(url, stream=True, timeout=60)
+                    r = requests.get(
+                        url,
+                        stream=True,
+                        headers={"User-Agent": DEFAULT_USER_AGENT},
+                        proxies=self.session.proxies,
+                        timeout=60,
+                    )
                     if r.status_code == 200:
                         resp = r
                         break
