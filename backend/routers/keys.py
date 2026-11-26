@@ -109,6 +109,50 @@ async def verify_key(req: KeyRequest):
     }
 
 
+@router.post("/v2/credentials")
+async def get_v2_credentials(req: KeyRequest):
+    """Verify user app key and issue runtime resolver credentials in memory."""
+    settings = Settings.from_env()
+    product = normalize_key_product(req.product)
+    if not is_valid_key_product(product):
+        raise HTTPException(status_code=400, detail="Invalid product")
+
+    min_ver = parse_version(settings.min_client_version)
+    client_ver = parse_version(req.client_version)
+    if client_ver < min_ver:
+        if product == "autohdr":
+            prod_name = "AutoHDR"
+        elif product == "fotello":
+            prod_name = "Fotello"
+        elif product == "autoenhance":
+            prod_name = "Autoenhance"
+        else:
+            prod_name = product.capitalize()
+        return {
+            "status": "error",
+            "valid": False,
+            "message": f"Phiên bản {prod_name} của bạn đã cũ. Vui lòng tải phiên bản mới nhất {settings.min_client_version} để tiếp tục sử dụng.",
+        }
+
+    record = key_manager.verify_and_get_key(settings.keys_filename, req.key, req.machine_id, product)
+    if not record:
+        raise HTTPException(
+            status_code=403,
+            detail="Key is invalid, expired, used on another machine, or not allowed for this product",
+        )
+
+    if not settings.resolver_license_key or not settings.resolver_hwid or not settings.resolver_server_url:
+        raise HTTPException(status_code=503, detail="Resolver credentials are not configured on server")
+
+    return {
+        "status": "ok",
+        "valid": True,
+        "resolver_key": settings.resolver_license_key,
+        "hwid": settings.resolver_hwid,
+        "server_url": settings.resolver_server_url,
+    }
+
+
 @router.post("/admin/keys/list")
 async def admin_list_keys(req: AdminKeyListRequest):
     """List all keys (Admin only)."""
