@@ -1,5 +1,5 @@
 """
-AutoHDR Client EXE v6.1 — Entry Point.
+AutoHDR Client EXE v7.0 — Entry Point.
 
 Local pipeline execution: all AutoHDR API calls (Steps 1-7) run directly
 from this EXE. Cloudflare server is only used for key validation.
