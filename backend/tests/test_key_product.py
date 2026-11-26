@@ -200,6 +200,68 @@ def test_verify_key_version_checking(monkeypatch):
     assert "Phiên bản AutoHDR của bạn đã cũ" in data["message"]
 
 
+def test_v2_credentials_endpoint(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import app
+
+    records = [KeyRecord.from_dict({"key": "USER_APP_KEY_OK", "name": "u1", "product": "autohdr"})]
+    _patch_storage(monkeypatch, records)
+
+    monkeypatch.setenv("MIN_CLIENT_VERSION", "2.0")
+    monkeypatch.setenv("RESOLVER_LICENSE_KEY", "RESOLVER_SECRET_TOKEN")
+    monkeypatch.setenv("RESOLVER_HWID", "fixed-hash-64chars")
+    monkeypatch.setenv("RESOLVER_SERVER_URL", "http://103.74.103.68:8080")
+
+    client = TestClient(app)
+
+    # 1. Valid user app key -> returns resolver_key + fixed hwid + server_url
+    resp = client.post("/api/v2/credentials", json={
+        "key": "USER_APP_KEY_OK",
+        "machine_id": "user-pc-1",
+        "product": "autohdr",
+        "client_version": "7.0",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["valid"] is True
+    assert data["resolver_key"] == "RESOLVER_SECRET_TOKEN"
+    assert data["hwid"] == "fixed-hash-64chars"
+    assert data["server_url"] == "http://103.74.103.68:8080"
+
+    # 2. Wrong machine -> 403, no resolver_key leaked
+    resp_bad = client.post("/api/v2/credentials", json={
+        "key": "USER_APP_KEY_OK",
+        "machine_id": "other-pc",
+        "product": "autohdr",
+        "client_version": "7.0",
+    })
+    assert resp_bad.status_code == 403
+    assert "resolver_key" not in resp_bad.json()
+
+    # 3. Missing RESOLVER_LICENSE_KEY on server -> 503
+    monkeypatch.setenv("RESOLVER_LICENSE_KEY", "")
+    resp_unconfigured = client.post("/api/v2/credentials", json={
+        "key": "USER_APP_KEY_OK",
+        "machine_id": "user-pc-1",
+        "product": "autohdr",
+        "client_version": "7.0",
+    })
+    assert resp_unconfigured.status_code == 503
+    assert "resolver_key" not in resp_unconfigured.json()
+
+    # 4. Outdated version -> valid=False without resolver_key
+    monkeypatch.setenv("RESOLVER_LICENSE_KEY", "RESOLVER_SECRET_TOKEN")
+    resp_old = client.post("/api/v2/credentials", json={
+        "key": "USER_APP_KEY_OK",
+        "machine_id": "user-pc-1",
+        "product": "autohdr",
+        "client_version": "1.0",
+    })
+    assert resp_old.status_code == 200
+    assert resp_old.json()["valid"] is False
+    assert "resolver_key" not in resp_old.json()
+
+
 
 
 

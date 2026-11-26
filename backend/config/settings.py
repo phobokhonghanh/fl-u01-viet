@@ -39,6 +39,11 @@ class Settings:
     # Version Settings
     min_client_version: str = "2.0"
 
+    # AutoHDR v2 Resolver Configuration (Cloudflare secrets/env only, never stored in client EXE)
+    resolver_license_key: Optional[str] = None
+    resolver_hwid: Optional[str] = None
+    resolver_server_url: Optional[str] = None
+
     @classmethod
     def from_env(cls, env_obj: Optional[Any] = None, env_path: Optional[str] = None) -> "Settings":
         load_dotenv(dotenv_path=env_path)
@@ -85,4 +90,7 @@ class Settings:
             price_lite=get_val("PRICE_LITE") or cls.price_lite,
             price_plus=get_val("PRICE_PLUS") or cls.price_plus,
             min_client_version=get_val("MIN_CLIENT_VERSION") or cls.min_client_version,
+            resolver_license_key=get_val("RESOLVER_LICENSE_KEY"),
+            resolver_hwid=get_val("RESOLVER_HWID"),
+            resolver_server_url=(get_val("RESOLVER_SERVER_URL") or "").rstrip("/") or None,
         )
